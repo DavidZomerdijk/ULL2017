@@ -2,6 +2,8 @@
 from collections import defaultdict
 from os import path
 
+import numpy as np
+
 
 def read_corpus(path):
     """Read a file as a list of tuples"""
@@ -20,54 +22,75 @@ def main():
     ns_per_v = defaultdict(list)
     vs_per_n = defaultdict(list)
     f_vn = defaultdict(int)
-    n_unique_pairs = len(set(corpus))
+    ys = set
 
-    for v, n in corpus:
-        ns_per_v[v] += [n]
-        vs_per_n[n] += [v]
-        f_vn[(v, n)] += 1
+    for vt, nt in corpus:
+        ns_per_v[vt] += [nt]
+        vs_per_n[nt] += [vt]
+        ys += [(vt, nt)]
+        f_vn[(vt, nt)] += 1
 
     # Number of classes
     n_cs = 30
-    n_unique_vs = len(set(ns_per_v.keys()))
-    n_unique_ns = len(set(vs_per_n.keys()))
+    ns = list(set(ns_per_v.keys()))
+    vs = list(set(vs_per_n.keys()))
+    n_unique_vs = len(ns)
+    n_unique_ns = len(vs)
+    n_unique_ys = len(ys)
 
     # Theta, parameters
-    t_c = defaultdict(float)
-    t_vc = defaultdict(float)
-    t_nc = defaultdict(float)
+    p_c = np.random.rand(n_cs)
+    p_c /= np.sum(p_c)
+    p_vc = np.random.rand(n_unique_vs, n_cs)
+    p_vc /= np.sum(p_vc, axis=0)
+    p_nc = np.random.rand(n_unique_ns, n_cs)
+    p_nc /= np.sum(p_nc, axis=0)
 
-    for c in range(n_cs):
-        t_c[c] = 1. / n_cs
+    def p(c, v, n):
 
-        for v, _ in ns_per_v.items():
-            t_vc[(v, c)] = 1. / n_unique_vs
+        if isinstance(v, str):
+            v = vs.index(v)
 
-        for n, _ in vs_per_n.items():
-            t_nc[(n, c)] = 1. / n_unique_ns
+        if isinstance(n, str):
+            n = ns.index(n)
+
+        return p_c[c] * p_vc[v, c] * p_nc[n, c]
+
+    def f(v, n):
+
+        if isinstance(v, int):
+            v = vs[v]
+
+        if isinstance(n, int):
+            n = ns[n]
+
+        return f_vn[(v, n)]
 
     # EM iterations
     for i in range(10):
-        t_c_1 = defaultdict(float)
-        t_vc_1 = defaultdict(float)
-        t_nc_1 = defaultdict(float)
+        p_c_1 = np.array(p_c)
+        p_vc_1 = np.array(p_vc)
+        p_nc_1 = defaultdict(p_nc)
 
-        # for c in range(n_cs):
-        #     t_c[c] = 1. / n_cs
-        #
-        #     for v, _ in ns_per_v.items():
-        #         t_vc[(v, c)] = 1. / n_unique_vs
-        #
-        #     for n, _ in vs_per_n.items():
-        #         t_nc[(n, c)] = 1. / n_unique_ns
+        for c in range(n_cs):
 
-        t_c = t_c_1
-        t_vc = t_vc_1
-        t_nc = t_nc_1
+            # Sigma_y f(y)p(x|y)
+            d = sum([f(v, n) * p(c, v, n) for (v, n) in ys])
 
+            for v, vt in enumerate(vs):
+                p_vc_1[v, c] = sum([f(v, n) * p(c, v, n) for n in ns_per_v[vt]]) / d
 
+            for n, nt in enumerate(ns):
+                p_nc_1[n, c] = sum([f(v, n) * p(c, v, n) for v in vs_per_n[nt]]) / d
 
-    print(corpus[-1])
+            p_c_1[c] = d
+
+        p_c_1 /= n_unique_ys
+
+        p_c = p_c_1
+        p_vc = p_vc_1
+        p_nc = p_nc_1
+        
 
 if __name__ == "__main__":
     main()
