@@ -90,7 +90,7 @@ def main():
         p_vc_1 = np.array(p_vc)
         p_nc_1 = np.array(p_nc)
 
-        likelihood = sum([np.log(p_vn(v, n)) for (v, n) in ys])
+        likelihood = sum([np.log(f(v, n) * p_vn(v, n)) for (v, n) in ys])
         print('%i: Log-likelihood: %f' % (i, likelihood))
 
         for c in range(n_cs):
