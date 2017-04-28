@@ -32,6 +32,10 @@ def main():
 
     # Number of classes
     n_cs = 30
+
+    # Iterations
+    em_iter = 20
+
     ys = list(set(ys))
     ns = list(set(vs_per_n.keys()))
     vs = list(set(ns_per_v.keys()))
@@ -47,6 +51,7 @@ def main():
     p_nc = np.random.rand(n_unique_ns, n_cs)
     p_nc /= np.sum(p_nc, axis=0)
 
+    # p(c|v, n)
     def p_c_vn(c, v, n):
 
         if isinstance(v, str):
@@ -57,10 +62,18 @@ def main():
 
         return p_c[c] * p_vc[v, c] * p_nc[n, c] / p_vn(v, n)
 
+    # p(v, n)
     def p_vn(v, n):
+
+        if isinstance(v, str):
+            v = vs.index(v)
+
+        if isinstance(n, str):
+            n = ns.index(n)
 
         return sum([p_c[c] * p_vc[v, c] * p_nc[n, c] for c in range(n_cs)])
 
+    # frequency for pair
     def f(v, n):
 
         if isinstance(v, int):
@@ -72,28 +85,28 @@ def main():
         return f_vn[(v, n)]
 
     # EM iterations
-    for i in range(10):
+    for i in range(em_iter):
         p_c_1 = np.array(p_c)
         p_vc_1 = np.array(p_vc)
         p_nc_1 = np.array(p_nc)
 
-        likelihood = 0
+        likelihood = sum([np.log(p_vn(v, n)) for (v, n) in ys])
+        print('%i: Log-likelihood: %f' % (i, likelihood))
 
         for c in range(n_cs):
 
             # Sigma_y f(y)p(x|y)
             d = sum([f(v, n) * p_c_vn(c, v, n) for (v, n) in ys])
-            likelihood += np.log(d)
 
             for v, vt in enumerate(vs):
+                # Sigma_y in {v} X N f(y)p(x|y)
                 p_vc_1[v, c] = sum([f(v, n) * p_c_vn(c, v, n) for n in ns_per_v[vt]]) / d
 
             for n, nt in enumerate(ns):
+                # Sigma_y in N X {v} f(y)p(x|y)
                 p_nc_1[n, c] = sum([f(v, n) * p_c_vn(c, v, n) for v in vs_per_n[nt]]) / d
 
             p_c_1[c] = d
-
-        print('Likelihood: %f', likelihood)
 
         p_c_1 /= n_unique_ys
 
