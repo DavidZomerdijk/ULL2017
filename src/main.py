@@ -55,16 +55,25 @@ class Dataset:
         # Token-index lookup
         self.ns = list()
         self.vs = list()
+        self.ns_in_subj = list()
+        self.ns_tr_subj = list()
+        self.ns_tr_obj = list()
 
         self.ns_per_v = defaultdict(set)
         self.vs_per_n = defaultdict(set)
         self.f_vn = defaultdict(int)
-        self.ys = set()
+        self.f_in_subj = defaultdict(int)
+        self.f_tr_so = defaultdict(int)
+        self.ys = set()  # v,n pairs
+        self.tr_sos = set()  # n,n pairs
 
         if max_lines is None or max_lines > len(lines):
             n_lines = len(lines)
         else:
             n_lines = max_lines
+
+        # To have correct scoping
+        n_tr_subj = 0
 
         for i, ln in enumerate(lines):
 
@@ -77,6 +86,10 @@ class Dataset:
 
             if len(ln) == 2:
                 vt, nt = ln
+
+                # -------------------------
+                # Datastructures for step 1
+                # -------------------------
 
                 if nt not in self.ns:
                     n = len(self.ns)
@@ -94,6 +107,39 @@ class Dataset:
                 self.vs_per_n[n] |= {v}
                 self.ys |= {(v, n)}
                 self.f_vn[(v, n)] += 1
+
+                # -------------------------
+                # Datastructures for step 2
+                # -------------------------
+
+                # Subject of an intransitive verb
+                if vt.endswith('s_nsubj'):
+                    if nt not in self.ns_in_subj:
+                        n_in_subj = len(self.ns_in_subj)
+                        self.ns_in_subj.append(nt)
+                    else:
+                        n_in_subj = self.ns.index(nt)
+
+                    self.f_in_subj[n_in_subj] += 1
+
+                # Subject of an transitive verb
+                elif vt.endswith('so_nsubj'):
+                    if nt not in self.ns_tr_subj:
+                        n_tr_subj = len(self.ns_tr_subj)
+                        self.ns_tr_subj.append(nt)
+                    else:
+                        n_tr_subj = self.ns.index(nt)
+
+                # Object of an transitive verb
+                elif vt.endswith('so_dobj'):
+                    if nt not in self.ns_tr_obj:
+                        n_tr_obj = len(self.ns_tr_obj)
+                        self.ns_tr_obj.append(nt)
+                    else:
+                        n_tr_obj = self.ns.index(nt)
+
+                    self.f_tr_so[(n_tr_subj, n_tr_obj)] += 1
+                    self.tr_sos |= {(n_tr_subj, n_tr_obj)}
 
         # Lengths
         self.n_vs = len(self.vs)
@@ -175,9 +221,10 @@ class LSCVerbClasses:
         Train the algorithm
         """
         for i in range(self.em_iters):
-            self.em_iter(i)
+            likelihood = self.em_iter(i)
+            print('%i: Log-likelihood: %f' % (i, likelihood))
 
-    def em_iter(self, i=0):
+    def em_iter(self):
         """
         Do an EM step
         :param i: iteration
@@ -195,7 +242,6 @@ class LSCVerbClasses:
                     }
 
         likelihood = sum([np.log(self.f(v, n) * self.p_vn[(v, n)]) for (v, n) in self.dataset.ys])
-        print('%i: Log-likelihood: %f' % (i, likelihood))
 
         for c in range(self.n_cs):
 
@@ -209,6 +255,92 @@ class LSCVerbClasses:
             for n in range(self.dataset.n_ns):
                 # Sigma_y in N X {v} f(y)p(x|y)
                 p_nc_1[n, c] = sum([self.f(v, n) * self.p_c_vn(c, v, n) for v in self.dataset.vs_per_n[n]]) / d
+
+            p_c_1[c] = d
+
+        # d / |Y|
+        p_c_1 /= self.dataset.n_ys
+
+        self.p_c = p_c_1
+        self.p_vc = p_vc_1
+        self.p_nc = p_nc_1
+
+        return likelihood
+
+
+class SubjectIntransitiveVerbClasses:
+    """
+    Clustering for subjects for fixed intransitive verbs
+
+    This is the implementation of Step 2
+    Verb classes (corresponding to Section 4.1 in the paper https://arxiv.org/abs/cs/9905008)
+    """
+
+    def __init__(self, dataset, n_cs=30, em_iters=50):
+        """
+        :param dataset: The dataset for which to train
+        :param n_cs: Number of classes
+        :param em_iters: Iterations
+        """
+        self.dataset = dataset
+        self.n_cs = n_cs
+        self.em_iters = em_iters
+
+        self.p_vn = None  # Calculated each EM-Iteration
+        self.p_c = self.initialize_parameters()
+
+    def initialize_parameters(self):
+        """
+        Initialize theta parameters
+        :return:
+        """
+        np.random.seed(1)
+
+        p_c = np.random.rand(self.n_cs)
+        p_c /= np.sum(p_c)
+
+        return p_c
+
+    def p_c_n(self, c, n):
+        """
+        p(c|n)
+        """
+
+        return self.p_c[c] / self.p_vn[(v, n)]
+
+    def f(self, n):
+        """
+        frequency for pair
+        f(v, n)
+        """
+
+        return self.dataset.f_in_subj[n]
+
+    def train(self):
+        """
+        Train the algorithm
+        """
+        for i in range(self.em_iters):
+            likelihood = self.em_iter(i)
+            print('%i: Log-likelihood: %f' % (i, likelihood))
+
+    def em_iter(self):
+        """
+        Do an EM step
+        :param i: iteration
+        :return: log-likelihood
+        """
+
+        p_c_1 = np.array(self.p_c)
+        p_vc_1 = np.array(self.p_vc)
+        p_nc_1 = np.array(self.p_nc)
+
+        likelihood = 0
+
+        for c in range(self.n_cs):
+
+            # Sigma_y f(y)p(x|y)
+            d = sum([self.f(n) * self.p_c_n(c, n) for n in self.dataset.ns_in_subj])
 
             p_c_1[c] = d
 
