@@ -144,6 +144,8 @@ class LSCVerbClasses:
         Initialize theta parameters
         :return:
         """
+        np.random.seed(1)
+
         p_c = np.random.rand(self.n_cs)
         p_c /= np.sum(p_c)
         p_vc = np.random.rand(self.dataset.n_vs, self.n_cs)
@@ -186,7 +188,6 @@ class LSCVerbClasses:
         p_vc_1 = np.array(self.p_vc)
         p_nc_1 = np.array(self.p_nc)
 
-
         self.p_vn = { (v, n):
                       sum([self.p_c[c] * self.p_vc[v, c] * self.p_nc[n, c] for c in range(self.n_cs)])
                       for (v, n)
@@ -228,7 +229,7 @@ def main():
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
 
-    dataset = Dataset.load(all_pairs, max_lines=500000)
+    dataset = Dataset.load(gold_corpus)
 
     LSCVerbClasses(dataset, n_cs=30, em_iters=50).train()
 
