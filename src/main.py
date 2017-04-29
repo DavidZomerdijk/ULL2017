@@ -275,9 +275,9 @@ class LSCVerbClasses:
         :param file_name:
         :return:
         """
-        f = open(file_name, 'wb')
-        pickle.dump(self.__dict__, f, 2)
-        f.close()
+
+        pickle.dump(self,  open(file_name + '.pkl', 'wb'))
+        
 
 
 class SubjectIntransitiveVerbClasses:
