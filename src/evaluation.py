@@ -17,7 +17,7 @@ def read_corpus(path):
 
 def createEvalSet(corpus, outputTrain, outputEval, size_eval=1000 ):
     """
-
+    This creates the dataset required for evaluation as described in section 3.1.
     :param corpus: a list of tuples
     :param outputTrain: name of the trainset
     :param outputEval: name of the evaluation set. (tuple of (v,n,v') saved as a pickle file)
@@ -67,6 +67,14 @@ def createEvalSet(corpus, outputTrain, outputEval, size_eval=1000 ):
 
     pickle.dump( corpus_train, open(outputTrain, "wb"))
     pickle.dump( evaluation, open(outputEval, "wb"))
+
+
+
+
+
+
+
+
 
 
 if __name__ == "__main__":
