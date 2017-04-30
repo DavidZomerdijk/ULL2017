@@ -73,9 +73,11 @@ if __name__ == "__main__":
     data_path = path.join(path.dirname(__file__), '..', 'data')
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
-    corpus = read_corpus(all_pairs)
+    corpus_a = read_corpus(all_pairs)
 
-    createEvalSet(corpus, "../data/train_eval/all_train.p", "../data/train_eval/all_eval_3000.p", 3000)
-    createEvalSet(gold_corpus, "../data/train_eval/gold_corpus_train.p", "../data/train_eval/gold_corpus_eval.p", 1000)
+    createEvalSet(corpus_a, "../data/train_eval/all_train.p", "../data/train_eval/all_eval_3000.p", 3000)
+
+    corpus_g = read_corpus(gold_corpus)
+    createEvalSet(corpus_g, "../data/train_eval/gold_corpus_train.p", "../data/train_eval/gold_corpus_eval.p", 1000)
 
 
