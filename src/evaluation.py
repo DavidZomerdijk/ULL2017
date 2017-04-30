@@ -75,6 +75,7 @@ if __name__ == "__main__":
     all_pairs = path.join(data_path, 'all_pairs')
     corpus = read_corpus(all_pairs)
 
-    createEvalSet(corpus, "../data/train_eval/all_train.p", "../data/train_eval/all_eval_1000.p", 1000)
+    createEvalSet(corpus, "../data/train_eval/all_train.p", "../data/train_eval/all_eval_3000.p", 3000)
+    createEvalSet(gold_corpus, "../data/train_eval/gold_corpus_train.p", "../data/train_eval/gold_corpus_eval.p", 1000)
 
 
