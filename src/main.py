@@ -197,8 +197,10 @@ class LSCVerbClasses:
 
         p_c = np.random.rand(self.n_cs)
         p_c /= np.sum(p_c)
+
         p_vc = np.random.rand(self.dataset.n_vs, self.n_cs)
         p_vc /= np.sum(p_vc, axis=0)
+
         p_nc = np.random.rand(self.dataset.n_ns, self.n_cs)
         p_nc /= np.sum(p_nc, axis=0)
 
@@ -270,6 +272,16 @@ class LSCVerbClasses:
 
         return likelihood
 
+    def save_model(self, file_name):
+        """
+        Function to save the class, which we can use for step 2
+        :param file_name:
+        :return:
+        """
+
+        pickle.dump(self,  open(file_name + '.pkl', 'wb'))
+        
+
 
 class SubjectIntransitiveVerbClasses:
     """
@@ -290,6 +302,7 @@ class SubjectIntransitiveVerbClasses:
         self.em_iters = em_iters
 
         self.p_vn = None  # Calculated each EM-Iteration
+        self.p_n = None # set this on none to start with
         self.p_c = self.initialize_parameters()
 
     def initialize_parameters(self):
@@ -302,7 +315,17 @@ class SubjectIntransitiveVerbClasses:
         p_c = np.random.rand(self.n_cs)
         p_c /= np.sum(p_c)
 
+
         return p_c
+
+
+    def p_n(self):
+        """
+        p(n)
+        :return: probability of p(n) for a given n
+        """
+
+        return None
 
     def p_c_n(self, c, n):
         """
