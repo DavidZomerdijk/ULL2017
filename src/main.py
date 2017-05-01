@@ -54,8 +54,11 @@ class Dataset:
 
         # Token-index lookup
         self.ns = list()
+        ns_set = set()
         self.vs = list()
+        vs_set = set()
         self.ys = list()  # v,n pairs
+        ys_set = set()
         self.f_ys = list()  # frequencies
 
         if max_lines is None or max_lines > len(lines):
@@ -79,24 +82,27 @@ class Dataset:
                 # Datastructures for step 1
                 # -------------------------
 
-                if nt not in self.ns:
+                if nt not in ns_set:
                     n = len(self.ns)
                     self.ns.append(nt)
+                    ns_set.add(nt)
                 else:
                     n = self.ns.index(nt)
 
-                if vt not in self.vs:
+                if vt not in vs_set:
                     v = len(self.vs)
                     self.vs.append(vt)
+                    vs_set.add(vt)
                 else:
                     v = self.vs.index(vt)
 
                 yp = (v, n)
 
-                if yp not in self.ys:
+                if yp not in ys_set:
                     y = len(self.ys)
                     self.ys.append(yp)
                     self.f_ys.append(1)
+                    ys_set.add(yp)
                 else:
                     y = self.ys.index(yp)
                     self.f_ys[y] += 1
