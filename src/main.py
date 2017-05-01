@@ -216,6 +216,14 @@ class LSCVerbClasses:
 
         return self.p_c[c] * self.p_vc[v, c] * self.p_nc[n, c] / self.p_vn[(v, n)]
 
+    # def save_model(self, file):
+    #     model = dict()
+    #     model["n_nc"] = self.n_cs
+    #     model["em_iters"] = self.em_iters
+    #
+    #     pickle.dump(model, open(file, "wb"))
+
+
     def f(self, v, n):
         """
         frequency for pair
@@ -223,6 +231,7 @@ class LSCVerbClasses:
         """
 
         return self.dataset.f_vn[(v, n)]
+
 
     def train(self):
         """
