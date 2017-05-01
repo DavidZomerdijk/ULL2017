@@ -175,7 +175,7 @@ class LSCVerbClasses:
     Verb classes (corresponding to Section 2 in the paper https://arxiv.org/abs/cs/9905008)
     """
 
-    def __init__(self, dataset, n_cs=30, em_iters=50):
+    def __init__(self, dataset, n_cs=30, em_iters=50, name='step1'):
         """
         :param dataset: The dataset for which to train
         :param n_cs: Number of classes
@@ -184,6 +184,9 @@ class LSCVerbClasses:
         self.dataset = dataset
         self.n_cs = n_cs
         self.em_iters = em_iters
+        self.current_iter = 0
+        self.name = name
+        self.likelihoods = list()
 
         self.p_vn = None  # Calculated each EM-Iteration
         self.p_c, self.p_vc, self.p_nc = self.initialize_parameters()
@@ -225,9 +228,15 @@ class LSCVerbClasses:
         """
         Train the algorithm
         """
-        for i in range(self.em_iters):
+        for i in range(self.current_iter, self.em_iters):
+            self.current_iter = i
+
             likelihood = self.em_iter()
+
+            self.likelihoods.append(likelihood)
             print('%i: Log-likelihood: %f' % (i, likelihood))
+
+            self.store()
 
     def em_iter(self):
         """
@@ -272,15 +281,15 @@ class LSCVerbClasses:
 
         return likelihood
 
-    def save_model(self, file_name):
+    def store(self):
         """
         Function to save the class, which we can use for step 2
         :param file_name:
         :return:
         """
 
-        pickle.dump(self,  open(file_name + '.pkl', 'wb'))
-        
+        out_path = path.join(path.dirname(__file__), '..', 'out', '%s-%d.pkl' % (self.name, self.current_iter))
+        pickle.dump(self,  open(out_path, 'wb'))
 
 
 class SubjectIntransitiveVerbClasses:
@@ -387,9 +396,9 @@ def main():
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
 
-    dataset = Dataset.load(all_pairs)
+    dataset = Dataset.load(gold_corpus)
 
-    LSCVerbClasses(dataset, n_cs=30, em_iters=50).train()
+    LSCVerbClasses(dataset, n_cs=30, em_iters=50, name='gold_deps').train()
 
 if __name__ == "__main__":
     main()
