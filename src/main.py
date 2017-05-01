@@ -193,30 +193,6 @@ class LSCVerbClasses:
 
         return p_c, p_vc, p_nc
 
-    def p_c_vn(self, c, v, n):
-        """
-        p(c|v, n)
-        """
-
-        return self.p_c[c] * self.p_vc[v, c] * self.p_nc[n, c] / self.p_vn[(v, n)]
-
-    # def save_model(self, file):
-    #     model = dict()
-    #     model["n_nc"] = self.n_cs
-    #     model["em_iters"] = self.em_iters
-    #
-    #     pickle.dump(model, open(file, "wb"))
-
-
-    def f(self, v, n):
-        """
-        frequency for pair
-        f(v, n)
-        """
-
-        return self.dataset.f_vn[(v, n)]
-
-
     def train(self):
         """
         Train the algorithm
@@ -296,9 +272,9 @@ def main():
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
 
-    dataset = Dataset.load(gold_corpus)
+    dataset = Dataset.load(all_pairs)
 
-    LSCVerbClasses(dataset, n_cs=30, em_iters=50, name='gold_corpus').train()
+    LSCVerbClasses(dataset, n_cs=30, em_iters=50, name='all_pairs').train()
 
 if __name__ == "__main__":
     main()
