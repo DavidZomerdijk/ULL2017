@@ -54,11 +54,11 @@ class Dataset:
 
         # Token-index lookup
         self.ns = list()
-        ns_set = set()
+        ns_dict = dict()
         self.vs = list()
-        vs_set = set()
+        vs_dict = dict()
         self.ys = list()  # v,n pairs
-        ys_set = set()
+        ys_dict = dict()
         self.f_ys = list()  # frequencies
 
         self.ys_per_v = defaultdict(list)
@@ -85,29 +85,29 @@ class Dataset:
                 # Datastructures for step 1
                 # -------------------------
 
-                if nt not in ns_set:
+                if nt not in ns_dict:
                     n = len(self.ns)
                     self.ns.append(nt)
-                    ns_set.add(nt)
+                    ns_dict[nt] = n
                 else:
-                    n = self.ns.index(nt)
+                    n = ns_dict[nt]
 
-                if vt not in vs_set:
+                if vt not in vs_dict:
                     v = len(self.vs)
                     self.vs.append(vt)
-                    vs_set.add(vt)
+                    vs_dict[vt] = v
                 else:
-                    v = self.vs.index(vt)
+                    v = vs_dict[vt]
 
                 yp = (v, n)
 
-                if yp not in ys_set:
+                if yp not in ys_dict:
                     y = len(self.ys)
                     self.ys.append(yp)
                     self.f_ys.append(1)
-                    ys_set.add(yp)
+                    ys_dict[yp] = y
                 else:
-                    y = self.ys.index(yp)
+                    y = ys_dict[yp]
                     self.f_ys[y] += 1
 
                 if y not in self.ys_per_v[v]:
@@ -115,7 +115,7 @@ class Dataset:
 
                 if y not in self.ys_per_n[n]:
                     self.ys_per_n[n].append(y)
-            
+
         # Lengths
         self.n_vs = len(self.vs)
         self.n_ns = len(self.ns)
