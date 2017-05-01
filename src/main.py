@@ -31,9 +31,6 @@ class Dataset:
         print("\tUnique verbs:\t%d" % dataset.n_vs)
         print("\tUnique nouns:\t%d" % dataset.n_ns)
         print("\tUnique pairs:\t%d" % dataset.n_ys)
-        print("\tUnique intransitive subjects:\t%d" % len(dataset.ns_in_subj))
-        print("\tUnique transitive subjects:\t\t%d" % len(dataset.ns_tr_subj))
-        print("\tUnique transitive objects:\t\t%d" % len(dataset.ns_tr_obj))
 
         return dataset
 
@@ -58,25 +55,13 @@ class Dataset:
         # Token-index lookup
         self.ns = list()
         self.vs = list()
-        self.ns_in_subj = list()
-        self.ns_tr_subj = list()
-        self.ns_tr_obj = list()
-
-        self.ns_per_v = defaultdict(set)
-        self.vs_per_n = defaultdict(set)
-        self.f_vn = defaultdict(int)
-        self.f_in_subj = defaultdict(int)
-        self.f_tr_so = defaultdict(int)
-        self.ys = set()  # v,n pairs
-        self.tr_sos = set()  # n,n pairs
+        self.ys = list()  # v,n pairs
+        self.f_ys = list()  # frequencies
 
         if max_lines is None or max_lines > len(lines):
             n_lines = len(lines)
         else:
             n_lines = max_lines
-
-        # To have correct scoping
-        n_tr_subj = 0
 
         for i, ln in enumerate(lines):
 
@@ -106,43 +91,24 @@ class Dataset:
                 else:
                     v = self.vs.index(vt)
 
-                self.ns_per_v[v] |= {n}
-                self.vs_per_n[n] |= {v}
-                self.ys |= {(v, n)}
-                self.f_vn[(v, n)] += 1
+                yp = (v, n)
 
-                # -------------------------
-                # Datastructures for step 2
-                # -------------------------
+                if yp not in self.ys:
+                    y = len(self.ys)
+                    self.ys.append(yp)
+                    self.f_ys.append(1)
+                else:
+                    y = self.ys.index(yp)
+                    self.f_ys[y] += 1
 
-                # Subject of an intransitive verb
-                if vt.endswith('s_nsubj'):
-                    if nt not in self.ns_in_subj:
-                        n_in_subj = len(self.ns_in_subj)
-                        self.ns_in_subj.append(nt)
-                    else:
-                        n_in_subj = self.ns.index(nt)
+        self.ys_per_v = defaultdict(list)
+        self.ys_per_n = defaultdict(list)
 
-                    self.f_in_subj[n_in_subj] += 1
-
-                # Subject of an transitive verb
-                elif vt.endswith('so_nsubj'):
-                    if nt not in self.ns_tr_subj:
-                        n_tr_subj = len(self.ns_tr_subj)
-                        self.ns_tr_subj.append(nt)
-                    else:
-                        n_tr_subj = self.ns.index(nt)
-
-                # Object of an transitive verb
-                elif vt.endswith('so_dobj'):
-                    if nt not in self.ns_tr_obj:
-                        n_tr_obj = len(self.ns_tr_obj)
-                        self.ns_tr_obj.append(nt)
-                    else:
-                        n_tr_obj = self.ns.index(nt)
-
-                    self.f_tr_so[(n_tr_subj, n_tr_obj)] += 1
-                    self.tr_sos |= {(n_tr_subj, n_tr_obj)}
+        for y, (v, n) in enumerate(self.ys):
+            if y not in self.ys_per_v[v]:
+                self.ys_per_v[v].append(y)
+            if y not in self.ys_per_n[n]:
+                self.ys_per_n[n].append(y)
 
         # Lengths
         self.n_vs = len(self.vs)
@@ -152,6 +118,14 @@ class Dataset:
         print("\rDataset read")
 
         self.store(file_path, max_lines)
+
+    def __getstate__(self):
+        """Return state values to be pickled."""
+        return self.ns, self.vs, self.f_ys, self.ys, self.ys_per_v, self.ys_per_n, self.n_vs, self.n_ns, self.n_ys
+
+    def __setstate__(self, state):
+        """Restore state from the unpickled state values."""
+        self.ns, self.vs, self.f_ys, self.ys, self.ys_per_v, self.ys_per_n, self.n_vs, self.n_ns, self.n_ys = state
 
     def store(self, file_path, max_lines):
         """
@@ -191,6 +165,16 @@ class LSCVerbClasses:
         self.p_vn = None  # Calculated each EM-Iteration
         self.p_c, self.p_vc, self.p_nc = self.initialize_parameters()
 
+    def __getstate__(self):
+        """Return state values to be pickled."""
+        return self.n_cs, self.em_iters, self.current_iter, self.name, self.likelihoods, \
+               self.p_c, self.p_vc, self.p_nc
+
+    def __setstate__(self, state):
+        """Restore state from the unpickled state values."""
+        self.n_cs, self.em_iters, self.current_iter, self.name, self.likelihoods, \
+        self.p_c, self.p_vc, self.p_nc = state
+
     def initialize_parameters(self):
         """
         Initialize theta parameters
@@ -228,20 +212,25 @@ class LSCVerbClasses:
         """
         Train the algorithm
         """
+
+        ys_v = [v for (v, n) in self.dataset.ys]
+        ys_n = [n for (v, n) in self.dataset.ys]
+        f_ys = np.array(self.dataset.f_ys)
+
         for i in range(self.current_iter, self.em_iters):
             self.current_iter = i
 
-            likelihood = self.em_iter()
+            likelihood = self.em_iter(ys_v, ys_n, f_ys)
 
             self.likelihoods.append(likelihood)
             print('%i: Log-likelihood: %f' % (i, likelihood))
 
-            self.store()
+            if i % 10 == 0:
+                self.store()
 
-    def em_iter(self):
+    def em_iter(self, ys_v, ys_n, f_ys):
         """
         Do an EM step
-        :param i: iteration
         :return: log-likelihood
         """
 
@@ -249,31 +238,27 @@ class LSCVerbClasses:
         p_vc_1 = np.array(self.p_vc)
         p_nc_1 = np.array(self.p_nc)
 
-        self.p_vn = { (v, n):
-                      sum([self.p_c[c] * self.p_vc[v, c] * self.p_nc[n, c] for c in range(self.n_cs)])
-                      for (v, n)
-                      in self.dataset.ys
-                    }
+        p_c_vn = (self.p_c * self.p_vc[ys_v, :] * self.p_nc[ys_n, :]).T
+        p_vn = np.sum(p_c_vn, axis=0)  # P(v, n)
+        p_c_vn /= p_vn  # P(c|v, n)
 
-        likelihood = sum([np.log(self.f(v, n) * self.p_vn[(v, n)]) for (v, n) in self.dataset.ys])
+        likelihood = np.sum(f_ys * np.log(p_vn))
 
-        for c in range(self.n_cs):
+        # d = Sigma_y f(y)p(x|y)
+        d = np.sum(f_ys * p_c_vn, axis=1)
 
-            # d = Sigma_y f(y)p(x|y)
-            d = sum([self.f(v, n) * self.p_c_vn(c, v, n) for (v, n) in self.dataset.ys])
+        for v in range(self.dataset.n_vs):
+            # Sigma_y in {v} X N f(y)p(x|y) / d
+            ys_per_v = self.dataset.ys_per_v[v]
+            p_vc_1[v, :] = np.sum(f_ys[ys_per_v] * p_c_vn[:, ys_per_v], axis=1) / d
 
-            for v in range(self.dataset.n_vs):
-                # Sigma_y in {v} X N f(y)p(x|y) / d
-                p_vc_1[v, c] = sum([self.f(v, n) * self.p_c_vn(c, v, n) for n in self.dataset.ns_per_v[v]]) / d
-
-            for n in range(self.dataset.n_ns):
-                # Sigma_y in N X {v} f(y)p(x|y) / d
-                p_nc_1[n, c] = sum([self.f(v, n) * self.p_c_vn(c, v, n) for v in self.dataset.vs_per_n[n]]) / d
-
-            p_c_1[c] = d
+        for n in range(self.dataset.n_ns):
+            # Sigma_y in N X {v} f(y)p(x|y) / d
+            ys_per_n = self.dataset.ys_per_n[n]
+            p_nc_1[n, :] = np.sum(f_ys[ys_per_n] * p_c_vn[:, ys_per_n], axis=1) / d
 
         # d / |Y|
-        p_c_1 /= self.dataset.n_ys
+        p_c_1 = d / self.dataset.n_ys
 
         self.p_c = p_c_1
         self.p_vc = p_vc_1
@@ -287,106 +272,12 @@ class LSCVerbClasses:
         :param file_name:
         :return:
         """
+        out_path = path.join(
+            path.dirname(__file__), '..', 'out',
+            '%s-%d-%d.pkl' % (self.name, self.n_cs, self.current_iter)
+        )
 
-        out_path = path.join(path.dirname(__file__), '..', 'out', '%s-%d.pkl' % (self.name, self.current_iter))
         pickle.dump(self,  open(out_path, 'wb'))
-
-
-class SubjectIntransitiveVerbClasses:
-    """
-    Clustering for subjects for fixed intransitive verbs
-
-    This is the implementation of Step 2
-    Verb classes (corresponding to Section 4.1 in the paper https://arxiv.org/abs/cs/9905008)
-    """
-
-    def __init__(self, dataset, n_cs=30, em_iters=50):
-        """
-        :param dataset: The dataset for which to train
-        :param n_cs: Number of classes
-        :param em_iters: Iterations
-        """
-        self.dataset = dataset
-        self.n_cs = n_cs
-        self.em_iters = em_iters
-
-        self.p_vn = None  # Calculated each EM-Iteration
-        self.p_n = None # set this on none to start with
-        self.p_c = self.initialize_parameters()
-
-    def initialize_parameters(self):
-        """
-        Initialize theta parameters
-        :return:
-        """
-        np.random.seed(1)
-
-        p_c = np.random.rand(self.n_cs)
-        p_c /= np.sum(p_c)
-
-
-        return p_c
-
-
-    def p_n(self):
-        """
-        p(n)
-        :return: probability of p(n) for a given n
-        """
-
-        return None
-
-    def p_c_n(self, c, n):
-        """
-        p(c|n)
-        """
-
-        return self.p_c[c] / self.p_vn[(v, n)]
-
-    def f(self, n):
-        """
-        frequency for pair
-        f(v, n)
-        """
-
-        return self.dataset.f_in_subj[n]
-
-    def train(self):
-        """
-        Train the algorithm
-        """
-        for i in range(self.em_iters):
-            likelihood = self.em_iter(i)
-            print('%i: Log-likelihood: %f' % (i, likelihood))
-
-    def em_iter(self):
-        """
-        Do an EM step
-        :param i: iteration
-        :return: log-likelihood
-        """
-
-        p_c_1 = np.array(self.p_c)
-        p_vc_1 = np.array(self.p_vc)
-        p_nc_1 = np.array(self.p_nc)
-
-        likelihood = 0
-
-        for c in range(self.n_cs):
-
-            # Sigma_y f(y)p(x|y)
-            d = sum([self.f(n) * self.p_c_n(c, n) for n in self.dataset.ns_in_subj])
-
-            p_c_1[c] = d
-
-        # d / |Y|
-        p_c_1 /= self.dataset.n_ys
-
-        self.p_c = p_c_1
-        self.p_vc = p_vc_1
-        self.p_nc = p_nc_1
-
-        return likelihood
 
 
 def main():
@@ -398,7 +289,7 @@ def main():
 
     dataset = Dataset.load(gold_corpus)
 
-    LSCVerbClasses(dataset, n_cs=30, em_iters=50, name='gold_deps').train()
+    LSCVerbClasses(dataset, n_cs=30, em_iters=50, name='gold_corpus').train()
 
 if __name__ == "__main__":
     main()
