@@ -31,6 +31,9 @@ class Dataset:
         print("\tUnique verbs:\t%d" % dataset.n_vs)
         print("\tUnique nouns:\t%d" % dataset.n_ns)
         print("\tUnique pairs:\t%d" % dataset.n_ys)
+        print("\tUnique intransitive subjects:\t%d" % len(dataset.ns_in_subj))
+        print("\tUnique transitive subjects:\t\t%d" % len(dataset.ns_tr_subj))
+        print("\tUnique transitive objects:\t\t%d" % len(dataset.ns_tr_obj))
 
         return dataset
 
@@ -221,7 +224,7 @@ class LSCVerbClasses:
         Train the algorithm
         """
         for i in range(self.em_iters):
-            likelihood = self.em_iter(i)
+            likelihood = self.em_iter()
             print('%i: Log-likelihood: %f' % (i, likelihood))
 
     def em_iter(self):
@@ -245,15 +248,15 @@ class LSCVerbClasses:
 
         for c in range(self.n_cs):
 
-            # Sigma_y f(y)p(x|y)
+            # d = Sigma_y f(y)p(x|y)
             d = sum([self.f(v, n) * self.p_c_vn(c, v, n) for (v, n) in self.dataset.ys])
 
             for v in range(self.dataset.n_vs):
-                # Sigma_y in {v} X N f(y)p(x|y)
+                # Sigma_y in {v} X N f(y)p(x|y) / d
                 p_vc_1[v, c] = sum([self.f(v, n) * self.p_c_vn(c, v, n) for n in self.dataset.ns_per_v[v]]) / d
 
             for n in range(self.dataset.n_ns):
-                # Sigma_y in N X {v} f(y)p(x|y)
+                # Sigma_y in N X {v} f(y)p(x|y) / d
                 p_nc_1[n, c] = sum([self.f(v, n) * self.p_c_vn(c, v, n) for v in self.dataset.vs_per_n[n]]) / d
 
             p_c_1[c] = d
@@ -361,7 +364,7 @@ def main():
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
 
-    dataset = Dataset.load(gold_corpus)
+    dataset = Dataset.load(all_pairs)
 
     LSCVerbClasses(dataset, n_cs=30, em_iters=50).train()
 
