@@ -61,6 +61,9 @@ class Dataset:
         ys_set = set()
         self.f_ys = list()  # frequencies
 
+        self.ys_per_v = defaultdict(list)
+        self.ys_per_n = defaultdict(list)
+
         if max_lines is None or max_lines > len(lines):
             n_lines = len(lines)
         else:
@@ -107,15 +110,12 @@ class Dataset:
                     y = self.ys.index(yp)
                     self.f_ys[y] += 1
 
-        self.ys_per_v = defaultdict(list)
-        self.ys_per_n = defaultdict(list)
+                if y not in self.ys_per_v[v]:
+                    self.ys_per_v[v].append(y)
 
-        for y, (v, n) in enumerate(self.ys):
-            if y not in self.ys_per_v[v]:
-                self.ys_per_v[v].append(y)
-            if y not in self.ys_per_n[n]:
-                self.ys_per_n[n].append(y)
-
+                if y not in self.ys_per_n[n]:
+                    self.ys_per_n[n].append(y)
+            
         # Lengths
         self.n_vs = len(self.vs)
         self.n_ns = len(self.ns)
