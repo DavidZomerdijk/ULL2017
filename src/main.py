@@ -159,13 +159,13 @@ class Dataset:
 
     def __getstate__(self):
         """Return state values to be pickled."""
-        return self.ns, self.vs, self.f_n_train, self.f_v_train, self.f_ys_train, self.ys_train, self.ys_train_per_v, self.ys_train_per_n, \
-               self.f_ys_test, self.ys_test, self.n_vs, self.n_ns, self.n_ys_train, self.n_ys_test
+        return self.ns, self.vs, self.f_n_train, self.f_v_train, self.f_ys_train, self.ys_train, self.ys_train_dict, self.ys_train_per_v, self.ys_train_per_n, \
+               self.f_ys_test, self.ys_test, self.ys_test_dict, self.n_vs, self.n_ns, self.n_ys_train, self.n_ys_test
 
     def __setstate__(self, state):
         """Restore state from the unpickled state values."""
-        self.ns, self.vs, self.f_n_train, self.f_v_train, self.f_ys_train, self.ys_train, self.ys_train_per_v, self.ys_train_per_n, self.f_ys_test, \
-        self.ys_test, self.n_vs, self.n_ns, self.n_ys_train, self.n_ys_test = state
+        self.ns, self.vs, self.f_n_train, self.f_v_train, self.f_ys_train, self.ys_train, self.ys_train_dict, self.ys_train_per_v, self.ys_train_per_n, \
+        self.f_ys_test, self.ys_test, self.ys_test_dict, self.n_vs, self.n_ns, self.n_ys_train, self.n_ys_test = state
 
     def store(self, file_path, max_lines):
         """
@@ -201,6 +201,7 @@ class LSCVerbClasses:
         self.current_iter = 0
         self.name = name
         self.likelihoods = list()
+        self.accuracies = dict()
 
         self.p_vn = None  # Calculated each EM-Iteration
         self.p_c, self.p_vc, self.p_nc = self.initialize_parameters()
@@ -208,12 +209,12 @@ class LSCVerbClasses:
     def __getstate__(self):
         """Return state values to be pickled."""
         return self.n_cs, self.em_iters, self.current_iter, self.name, self.likelihoods, \
-               self.p_c, self.p_vc, self.p_nc
+               self.p_c, self.p_vc, self.p_nc, self.accuracies
 
     def __setstate__(self, state):
         """Restore state from the unpickled state values."""
         self.n_cs, self.em_iters, self.current_iter, self.name, self.likelihoods, \
-        self.p_c, self.p_vc, self.p_nc = state
+        self.p_c, self.p_vc, self.p_nc, self.accuracies = state
 
     def initialize_parameters(self):
         """
@@ -242,13 +243,21 @@ class LSCVerbClasses:
         ys_n = [n for (v, n) in self.dataset.ys_train]
         f_ys = np.array(self.dataset.f_ys_train)
 
+        evaluator = EvaluationPseudoDisambiguation(self.dataset, self, lower_bound=30)
+
         for i in range(self.current_iter, self.em_iters):
             self.current_iter = i
 
             likelihood = self.em_iter(ys_v, ys_n, f_ys)
 
             self.likelihoods.append(likelihood)
-            print('%i: Log-likelihood: %f' % (i, likelihood))
+
+            if i % 5 == 0:
+                acc = evaluator.evaluate()
+                self.accuracies[i] = acc
+                print('%i: Log-likelihood: %f\tAccuracy:\t%f' % (i, likelihood, acc))
+            else:
+                print('%i: Log-likelihood: %f' % (i, likelihood))
 
             if i % 10 == 0:
                 self.store()
@@ -325,7 +334,7 @@ class EvaluationPseudoDisambiguation:
 
         self.dataset = dataset
         self.model = model
-        self.zs = list() # tripples
+        self.zs = list()  # tripples
 
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
@@ -358,7 +367,7 @@ class EvaluationPseudoDisambiguation:
                     continue
 
                 # can't be in the train or test set icm with n
-                if yp in self.dataset.ys_train or yp in self.dataset.ys_test:
+                if yp in self.dataset.ys_train_dict or yp in self.dataset.ys_test_dict:
                     continue
 
                 v_accent = v_considered
@@ -370,14 +379,13 @@ class EvaluationPseudoDisambiguation:
 
     def evaluate(self):
 
-        succes = 0.0
+        success = 0.0
 
         for (v, n, v_accent) in self.zs:
             if self.model.p_n_v(n, v) > self.model.p_n_v(n, v_accent):
-                succes += 1.
+                success += 1.
 
-        print("\tAccuracy (test):\t%f" % (succes / float(len(self.zs))))
-
+        return success / float(len(self.zs))
 
 
 def main():
@@ -387,12 +395,12 @@ def main():
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
 
-    dataset = Dataset.load(gold_corpus, n_test_pairs=50)
+    dataset = Dataset.load(all_pairs, n_test_pairs=3000)
 
-    parameters = [# (1, 101),
-                  # (10, 101),
-                  (20, 5),
-                  (30, 5),
+    parameters = [#(1, 101),
+                  #(10, 101),
+                  # (20, 50),
+                  (30, 50),
                   # (40, 101),
                   # (50, 101),
                   # (60, 101),
@@ -406,7 +414,6 @@ def main():
         print("------")
         model = LSCVerbClasses(dataset, n_cs=n_cs, em_iters=em_itters, name='all_pairs')
         model.train()
-        EvaluationPseudoDisambiguation(dataset, model, lower_bound=3).evaluate()
 
 if __name__ == "__main__":
     main()
