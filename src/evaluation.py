@@ -38,6 +38,9 @@ def createEvalSet(corpus, outputTrain, outputEval, size_eval=1000 ):
     f_vs_train = defaultdict(int)
     f_vn = defaultdict(int)
 
+    with open(outputTrain, "w") as f:
+        f.write("")
+
 
     # for i in range(len(corpus_train)):
     #     if len(corpus_train[i]) != 2:
@@ -138,7 +141,7 @@ def evaluate_models(modelFiles, name_train_data,  evaluationFile):
     train_data = Dataset.load(path.join(path_train_data, name_train_data))
 
     with open("evaluation31.txt", "w") as f:
-        f.write("")
+        f.write("clusters iters acc\n")
     print("created evaluation31.txt")
 
 
@@ -218,13 +221,13 @@ def evaluate_models(modelFiles, name_train_data,  evaluationFile):
 
 
 if __name__ == "__main__":
-    # create_datasets()
+    create_datasets()
 
 
     # modelfiles = [(15,10,"../out/gold_deps-15-10.pkl"), (40,30, "../out/gold_deps-40-30.pkl"), (40,40,"../out/gold_deps-40-40.pkl")]
     # modelfiles = [ "../out/gold_deps-40-40.pkl"]
     # name_train_data = "gold_corpus_train_1000.txt"
-    evaluationFile = "../data/train_eval/gold_corpus_eval_1000.p"
+    # evaluationFile = "../data/train_eval/gold_corpus_eval_1000.p"
 
     parameters = [(1, 50), (10, 50), (20, 50), (30, 50), (40, 50), (50, 50), (60, 50), (70, 50), (80, 50), (90, 50),
                   (100, 50)]
