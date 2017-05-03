@@ -64,9 +64,12 @@ class Dataset:
         self.ns_dict = dict()
         self.vs = list()
         self.vs_dict = dict()
+        self.ns_in_subj = list()
+        self.ns_in_subj_dict = dict()
 
         self.f_n_train = list()
         self.f_v_train = list()
+        self.f_in_subj = list()
 
         self.ys_train = list()  # v,n pairs
         self.ys_train_dict = dict()
@@ -141,6 +144,20 @@ class Dataset:
                 self.ys_train_per_n[n].append(y)
         else:
             self.process_pair(n, v, self.ys_test, self.ys_test_dict, self.f_ys_test)
+
+        # -------------------------
+        # Datastructures for step 2
+        # -------------------------
+
+        # Subject of an intransitive verb
+        if vt.endswith('s_nsubj'):
+            if nt not in self.ns_in_subj_dict:
+                n_in_subj = len(self.ns_in_subj)
+                self.ns_in_subj.append(nt)
+                self.f_in_subj.append(1 if is_train else 0)
+            else:
+                n_in_subj = self.ns_in_subj_dict[nt]
+                if is_train: self.f_in_subj[n_in_subj] += 1
 
     def process_pair(self, n, v, ys, ys_dict, f_ys):
 
@@ -389,6 +406,70 @@ class EvaluationPseudoDisambiguation:
                 success += 1.
 
         return success / float(len(self.zs))
+
+
+class SubjectIntransitiveVerbClasses:
+    """
+    Clustering for subjects for fixed intransitive verbs
+    This is the implementation of Step 2
+    Verb classes (corresponding to Section 4.1 in the paper https://arxiv.org/abs/cs/9905008)
+    """
+
+    def __init__(self, dataset, model, v, em_iters=50):
+        """
+        :param dataset: The dataset for which to train
+        :param n_cs: Number of classes
+        :param em_iters: Iterations
+        """
+        self.dataset = dataset
+        self.model = model
+        self.em_iters = em_iters
+        self.v = v
+
+        self.p_c = self.initialize_parameters()
+
+    def initialize_parameters(self):
+        """
+        Initialize theta parameters
+        :return:
+        """
+        np.random.seed(1)
+
+        p_c = np.random.rand(self.model.n_cs)
+        p_c /= np.sum(p_c)
+
+        return p_c
+
+    def train(self):
+        """
+        Train the algorithm
+        """
+        for i in range(self.em_iters):
+            likelihood = self.em_iter(i)
+            print('%i: Log-likelihood: %f' % (i, likelihood))
+
+    def em_iter(self):
+        """
+        Do an EM step
+        :param i: iteration
+        :return: log-likelihood
+        """
+
+        p_c_vn = (self.p_c * self.p_nc[ys_n, :]).T
+        p_vn = np.sum(p_c_vn, axis=0)  # P(v, n)
+        p_c_vn /= p_vn  # P(c|v, n)
+
+        likelihood = np.sum(f_ys * np.log(p_vn))
+
+        # d = Sigma_y f(y)p(x|y)
+        d = np.sum(f_ys * p_c_vn, axis=1)
+
+        # d / |Y|
+        p_c_1 = d / self.dataset.n_ys_train
+
+        self.p_c = p_c_1
+
+        return likelihood
 
 
 def main():
