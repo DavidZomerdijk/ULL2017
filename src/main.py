@@ -1,4 +1,5 @@
 # coding: utf-8
+import random
 from collections import defaultdict
 from os import path
 from sys import stdout
@@ -117,7 +118,7 @@ class Dataset:
             n = len(self.ns)
             self.ns.append(nt)
             self.ns_dict[nt] = n
-            if is_train: self.f_n_train.append(1)
+            self.f_n_train.append(1 if is_train else 0)
         else:
             n = self.ns_dict[nt]
             if is_train: self.f_n_train[n] += 1
@@ -126,10 +127,10 @@ class Dataset:
             v = len(self.vs)
             self.vs.append(vt)
             self.vs_dict[vt] = v
-            if is_train: self.f_v_train.append(1)
+            self.f_v_train.append(1 if is_train else 0)
         else:
             v = self.vs_dict[vt]
-            if is_train: self.f_v_train[v] +=1
+            if is_train: self.f_v_train[v] += 1
 
         if is_train:
             y = self.process_pair(n, v, self.ys_train, self.ys_train_dict, self.f_ys_train)
@@ -290,6 +291,17 @@ class LSCVerbClasses:
 
         return likelihood
 
+    def p_n_v(self, n, v):
+        """
+        p(n|v)
+        """
+
+        p_c_vn = self.p_c * self.p_vc[v, :] * self.p_nc
+        p_vn = np.sum(p_c_vn.T, axis=0)  # P(v, n) for all n
+        p_v = np.sum(p_vn)  # P(v)
+
+        return p_vn[n] / p_v
+
     def store(self):
         """
         Function to save the class, which we can use for step 2
@@ -304,6 +316,70 @@ class LSCVerbClasses:
         pickle.dump(self,  open(out_path, 'wb'))
 
 
+class EvaluationPseudoDisambiguation:
+    """
+    Evaluation for Pseudo-Disambiguation (section 3.1)
+    """
+
+    def __init__(self, dataset, model, lower_bound=30, upper_bound=3000):
+
+        self.dataset = dataset
+        self.model = model
+        self.zs = list() # tripples
+
+        self.lower_bound = lower_bound
+        self.upper_bound = upper_bound
+
+        self.build_tripples()
+
+    def build_tripples(self):
+
+        random.seed(1)
+
+        for i, (v, n) in enumerate(self.dataset.ys_test):
+
+            # don't consider if upper or lower bound limits are not satisfied
+            if self.dataset.f_n_train[n] < self.lower_bound or self.dataset.f_n_train[n] > self.upper_bound:
+                continue
+
+            if self.dataset.f_v_train[v] < self.lower_bound or self.dataset.f_v_train[v] > self.upper_bound:
+                continue
+
+            # select v' until one found that satisfies requirements
+            v_accent = None
+            while v_accent is None:
+                v_considered = random.choice(range(len(self.dataset.vs)))
+
+                yp = (v_considered, n)
+
+                # don't consider if upper or lower bound limits are not satisfied
+                if self.dataset.f_v_train[v_considered] < self.lower_bound or \
+                   self.dataset.f_v_train[v_considered] > self.upper_bound:
+                    continue
+
+                # can't be in the train or test set icm with n
+                if yp in self.dataset.ys_train or yp in self.dataset.ys_test:
+                    continue
+
+                v_accent = v_considered
+
+            z = (v, n, v_accent)
+            self.zs.append(z)
+
+        print("\tTripples created (test):\t%d" % len(self.zs))
+
+    def evaluate(self):
+
+        succes = 0.0
+
+        for (v, n, v_accent) in self.zs:
+            if self.model.p_n_v(n, v) > self.model.p_n_v(n, v_accent):
+                succes += 1.
+
+        print("\tAccuracy (test):\t%f" % (succes / float(len(self.zs))))
+
+
+
 def main():
     """Program entry point"""
 
@@ -311,23 +387,26 @@ def main():
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
 
-    dataset = Dataset.load(all_pairs, n_test_pairs=3000)
+    dataset = Dataset.load(gold_corpus, n_test_pairs=50)
 
     parameters = [# (1, 101),
                   # (10, 101),
-                  (20, 101),
-                  (30, 101),
-                  (40, 101),
-                  (50, 101),
-                  (60, 101),
-                  (70, 101),
-                  (80, 101),
-                  (90, 101),
-                  (100, 101)]
+                  (20, 5),
+                  (30, 5),
+                  # (40, 101),
+                  # (50, 101),
+                  # (60, 101),
+                  # (70, 101),
+                  # (80, 101),
+                  # (90, 101),
+                  # (100, 101)
+                  ]
 
     for (n_cs, em_itters) in parameters:
         print("------")
-        LSCVerbClasses(dataset, n_cs=n_cs, em_iters=em_itters, name='all_pairs').train()
+        model = LSCVerbClasses(dataset, n_cs=n_cs, em_iters=em_itters, name='all_pairs')
+        model.train()
+        EvaluationPseudoDisambiguation(dataset, model, lower_bound=3).evaluate()
 
 if __name__ == "__main__":
     main()
