@@ -280,7 +280,21 @@ def main():
 
     dataset = Dataset.load(all_pairs)
 
-    LSCVerbClasses(dataset, n_cs=30, em_iters=50, name='all_pairs').train()
+    parameters = [(1, 101),
+        (10, 101),
+        (20, 101),
+        (30, 101),
+        (40, 101),
+        (50, 101),
+        (60, 101),
+        (70, 101),
+        (80, 101),
+        (90, 101),
+        (100, 101)]
+
+    for (n_cs, em_itters) in parameters:
+        print("------")
+        LSCVerbClasses(dataset, n_cs=n_cs, em_iters=em_itters, name='all_pairs').train()
 
 if __name__ == "__main__":
     main()
