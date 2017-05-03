@@ -13,56 +13,70 @@ class Dataset:
     """
 
     @classmethod
-    def load(cls, file_path, max_lines=None):
+    def load(cls, file_path, max_lines=None, n_test_pairs=0):
         """
         Loads .pkl file if available, otherwise creates dataset
         :return: Dataset
         """
 
-        pickle_path = cls.pickle_path(file_path, max_lines=max_lines)
+        pickle_path = cls.pickle_path(file_path, max_lines=max_lines, n_test_pairs=n_test_pairs)
 
         if path.isfile(pickle_path):
             print("Loading dataset (%s) from disk" % pickle_path)
             dataset = pickle.load(open(pickle_path, 'rb'))
         else:
-            dataset = Dataset(file_path, max_lines=max_lines)
+            dataset = Dataset(file_path, max_lines=max_lines, n_test_pairs=n_test_pairs)
 
         print("Dataset ready")
         print("\tUnique verbs:\t%d" % dataset.n_vs)
         print("\tUnique nouns:\t%d" % dataset.n_ns)
-        print("\tUnique pairs:\t%d" % dataset.n_ys)
+        print("\tUnique pairs (train):\t%d" % dataset.n_ys_train)
+        print("\tUnique pairs (test):\t%d" % dataset.n_ys_test)
 
         return dataset
 
     @classmethod
-    def pickle_path(cls, file_path, max_lines=None):
+    def pickle_path(cls, file_path, max_lines=None, n_test_pairs=0):
         """
         Returns the path of the pickle file
         """
 
-        if max_lines is None:
-            return file_path + '.pkl'
-        else:
-            return file_path + '-%d.pkl' % max_lines
+        if max_lines is not None:
+            file_path += '-l%d' % max_lines
 
-    def __init__(self, file_path, max_lines=None):
+        if n_test_pairs != 0:
+            file_path += '-t%d' % n_test_pairs
+
+        return file_path + '.pkl'
+
+    def __init__(self, file_path, max_lines=None, n_test_pairs=0):
         """
         Initialize a Dataset and read it in
         """
 
         lines = self.read_lines(file_path)
 
+        self.n_test_pairs = n_test_pairs
+
         # Token-index lookup
         self.ns = list()
-        ns_dict = dict()
+        self.ns_dict = dict()
         self.vs = list()
-        vs_dict = dict()
-        self.ys = list()  # v,n pairs
-        ys_dict = dict()
-        self.f_ys = list()  # frequencies
+        self.vs_dict = dict()
 
-        self.ys_per_v = defaultdict(list)
-        self.ys_per_n = defaultdict(list)
+        self.f_n_train = list()
+        self.f_v_train = list()
+
+        self.ys_train = list()  # v,n pairs
+        self.ys_train_dict = dict()
+        self.f_ys_train = list()  # frequencies
+
+        self.ys_train_per_v = defaultdict(list)
+        self.ys_train_per_n = defaultdict(list)
+
+        self.ys_test = list()  # v,n pairs
+        self.ys_test_dict = dict()
+        self.f_ys_test = list()  # frequencies
 
         if max_lines is None or max_lines > len(lines):
             n_lines = len(lines)
@@ -79,65 +93,84 @@ class Dataset:
                 stdout.flush()
 
             if len(ln) == 2:
-                vt, nt = ln
+                self.process_line(ln, i, n_lines)
 
-                # -------------------------
-                # Datastructures for step 1
-                # -------------------------
-
-                if nt not in ns_dict:
-                    n = len(self.ns)
-                    self.ns.append(nt)
-                    ns_dict[nt] = n
-                else:
-                    n = ns_dict[nt]
-
-                if vt not in vs_dict:
-                    v = len(self.vs)
-                    self.vs.append(vt)
-                    vs_dict[vt] = v
-                else:
-                    v = vs_dict[vt]
-
-                yp = (v, n)
-
-                if yp not in ys_dict:
-                    y = len(self.ys)
-                    self.ys.append(yp)
-                    self.f_ys.append(1)
-                    ys_dict[yp] = y
-                else:
-                    y = ys_dict[yp]
-                    self.f_ys[y] += 1
-
-                if y not in self.ys_per_v[v]:
-                    self.ys_per_v[v].append(y)
-
-                if y not in self.ys_per_n[n]:
-                    self.ys_per_n[n].append(y)
-
-        # Lengths
         self.n_vs = len(self.vs)
         self.n_ns = len(self.ns)
-        self.n_ys = len(self.ys)
+        self.n_ys_train = len(self.ys_train)
+        self.n_ys_test = len(self.ys_test)
 
         print("\rDataset read")
 
         self.store(file_path, max_lines)
 
+    def process_line(self, ln, i, n_lines):
+
+        vt, nt = ln
+        is_train = i < n_lines - self.n_test_pairs
+
+        # -------------------------
+        # Datastructures for step 1
+        # -------------------------
+
+        if nt not in self.ns_dict:
+            n = len(self.ns)
+            self.ns.append(nt)
+            self.ns_dict[nt] = n
+            if is_train: self.f_n_train.append(1)
+        else:
+            n = self.ns_dict[nt]
+            if is_train: self.f_n_train[n] += 1
+
+        if vt not in self.vs_dict:
+            v = len(self.vs)
+            self.vs.append(vt)
+            self.vs_dict[vt] = v
+            if is_train: self.f_v_train.append(1)
+        else:
+            v = self.vs_dict[vt]
+            if is_train: self.f_v_train[v] +=1
+
+        if is_train:
+            y = self.process_pair(n, v, self.ys_train, self.ys_train_dict, self.f_ys_train)
+
+            if y not in self.ys_train_per_v[v]:
+                self.ys_train_per_v[v].append(y)
+            if y not in self.ys_train_per_n[n]:
+                self.ys_train_per_n[n].append(y)
+        else:
+            self.process_pair(n, v, self.ys_test, self.ys_test_dict, self.f_ys_test)
+
+    def process_pair(self, n, v, ys, ys_dict, f_ys):
+
+        yp = (v, n)
+
+        if yp not in ys_dict:
+            y = len(ys)
+            ys.append(yp)
+            f_ys.append(1)
+            ys_dict[yp] = y
+        else:
+            y = ys_dict[yp]
+            f_ys[y] += 1
+
+        return y
+
     def __getstate__(self):
         """Return state values to be pickled."""
-        return self.ns, self.vs, self.f_ys, self.ys, self.ys_per_v, self.ys_per_n, self.n_vs, self.n_ns, self.n_ys
+        return self.ns, self.vs, self.f_n_train, self.f_v_train, self.f_ys_train, self.ys_train, self.ys_train_per_v, self.ys_train_per_n, \
+               self.f_ys_test, self.ys_test, self.n_vs, self.n_ns, self.n_ys_train, self.n_ys_test
 
     def __setstate__(self, state):
         """Restore state from the unpickled state values."""
-        self.ns, self.vs, self.f_ys, self.ys, self.ys_per_v, self.ys_per_n, self.n_vs, self.n_ns, self.n_ys = state
+        self.ns, self.vs, self.f_n_train, self.f_v_train, self.f_ys_train, self.ys_train, self.ys_train_per_v, self.ys_train_per_n, self.f_ys_test, \
+        self.ys_test, self.n_vs, self.n_ns, self.n_ys_train, self.n_ys_test = state
 
     def store(self, file_path, max_lines):
         """
         Stores dataset to .pkl file
         """
-        pickle.dump(self, open(Dataset.pickle_path(file_path, max_lines=max_lines), 'wb'))
+        pickle.dump(self, open(Dataset.pickle_path(file_path, max_lines=max_lines, n_test_pairs=self.n_test_pairs), 'wb'))
 
     def read_lines(self, file_path):
         """
@@ -204,9 +237,9 @@ class LSCVerbClasses:
         Train the algorithm
         """
 
-        ys_v = [v for (v, n) in self.dataset.ys]
-        ys_n = [n for (v, n) in self.dataset.ys]
-        f_ys = np.array(self.dataset.f_ys)
+        ys_v = [v for (v, n) in self.dataset.ys_train]
+        ys_n = [n for (v, n) in self.dataset.ys_train]
+        f_ys = np.array(self.dataset.f_ys_train)
 
         for i in range(self.current_iter, self.em_iters):
             self.current_iter = i
@@ -240,16 +273,16 @@ class LSCVerbClasses:
 
         for v in range(self.dataset.n_vs):
             # Sigma_y in {v} X N f(y)p(x|y) / d
-            ys_per_v = self.dataset.ys_per_v[v]
+            ys_per_v = self.dataset.ys_train_per_v[v]
             p_vc_1[v, :] = np.sum(f_ys[ys_per_v] * p_c_vn[:, ys_per_v], axis=1) / d
 
         for n in range(self.dataset.n_ns):
             # Sigma_y in N X {v} f(y)p(x|y) / d
-            ys_per_n = self.dataset.ys_per_n[n]
+            ys_per_n = self.dataset.ys_train_per_n[n]
             p_nc_1[n, :] = np.sum(f_ys[ys_per_n] * p_c_vn[:, ys_per_n], axis=1) / d
 
         # d / |Y|
-        p_c_1 = d / self.dataset.n_ys
+        p_c_1 = d / self.dataset.n_ys_train
 
         self.p_c = p_c_1
         self.p_vc = p_vc_1
@@ -278,9 +311,23 @@ def main():
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
 
-    dataset = Dataset.load(all_pairs)
+    dataset = Dataset.load(all_pairs, n_test_pairs=3000)
 
-    LSCVerbClasses(dataset, n_cs=30, em_iters=50, name='all_pairs').train()
+    parameters = [# (1, 101),
+                  # (10, 101),
+                  (20, 101),
+                  (30, 101),
+                  (40, 101),
+                  (50, 101),
+                  (60, 101),
+                  (70, 101),
+                  (80, 101),
+                  (90, 101),
+                  (100, 101)]
+
+    for (n_cs, em_itters) in parameters:
+        print("------")
+        LSCVerbClasses(dataset, n_cs=n_cs, em_iters=em_itters, name='all_pairs').train()
 
 if __name__ == "__main__":
     main()
