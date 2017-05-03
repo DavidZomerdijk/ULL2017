@@ -379,6 +379,9 @@ class EvaluationPseudoDisambiguation:
 
     def evaluate(self):
 
+        if len(self.zs) == 0:
+            return 0.0
+
         success = 0.0
 
         for (v, n, v_accent) in self.zs:
@@ -395,20 +398,19 @@ def main():
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
 
-    dataset = Dataset.load(all_pairs)
+    dataset = Dataset.load(all_pairs, n_test_pairs=3000)
 
     parameters = [
-        # (1, 51),
+        (5, 51),
         (10, 51),
         (20, 51),
         (30, 51),
         (40, 51),
         (50, 51),
-        (60, 51),
-        (70, 51),
-        (80, 51),
-        (90, 51),
-        (100, 51)
+        (75, 51),
+        (100, 51),
+        (200, 51),
+        (300, 51)
     ]
 
     for (n_cs, em_itters) in parameters:
