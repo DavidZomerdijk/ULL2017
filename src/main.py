@@ -610,12 +610,10 @@ class SubjectObjectTransitiveVerbClasses:
         :return: log-likelihood
         """
 
-        p_nc1 = np.expand_dims(self.model.p_nc[ws_s, :], axis=2)
-        p_nc2 = np.expand_dims(self.model.p_nc[ws_o, :], axis=1)
+        p_nc1 = np.expand_dims(self.model.p_nc[ws_s, :], axis=1)
+        p_nc2 = np.expand_dims(self.model.p_nc[ws_o, :], axis=2)
 
-        p_nc_dot = (p_nc1 * p_nc2)
-
-        p_c_n = (self.p_c * p_nc_dot).T # p(c)P_LC(n1|c1)P_LC(n2|c2)
+        p_c_n = (self.p_c * (p_nc1 * p_nc2)).T # p(c)P_LC(n1|c1)P_LC(n2|c2)
         p_n = np.sum(p_c_n, axis=(0, 1)) # P(n1,n2)
         p_c_n /= p_n  # P(c1,c2|n1,n2)
 
@@ -645,7 +643,7 @@ def main():
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
 
-    dataset = Dataset.load(gold_corpus, n_test_pairs=300)
+    dataset = Dataset.load(all_pairs, n_test_pairs=3000)
 
     parameters = [
         (5, 51),
