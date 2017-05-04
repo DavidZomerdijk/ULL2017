@@ -31,11 +31,12 @@ class Dataset:
         print("Dataset ready")
         print("\tUnique verbs:\t%d" % dataset.n_vs)
         print("\tUnique nouns:\t%d" % dataset.n_ns)
-        print("\tUnique pairs (train):\t%d" % dataset.n_ys)
-        print("\tUnique pairs (test):\t%d" % dataset.n_ys_test)
+        print("\tUnique verb-noun pairs (train):\t%d" % dataset.n_ys)
+        print("\tUnique verb-noun pairs (test):\t%d" % dataset.n_ys_test)
         print("\tUnique intransitive subjects:\t%d" % len(dataset.ns_in_subj))
         print("\tUnique transitive subjects:\t\t%d" % len(dataset.ns_tr_subj))
         print("\tUnique transitive objects:\t\t%d" % len(dataset.ns_tr_obj))
+        print("\tUnique subject-object pairs:\t%d" % len(dataset.ws))
 
         return dataset
 
