@@ -31,8 +31,11 @@ class Dataset:
         print("Dataset ready")
         print("\tUnique verbs:\t%d" % dataset.n_vs)
         print("\tUnique nouns:\t%d" % dataset.n_ns)
-        print("\tUnique pairs (train):\t%d" % dataset.n_ys_train)
+        print("\tUnique pairs (train):\t%d" % dataset.n_ys)
         print("\tUnique pairs (test):\t%d" % dataset.n_ys_test)
+        print("\tUnique intransitive subjects:\t%d" % len(dataset.ns_in_subj))
+        print("\tUnique transitive subjects:\t\t%d" % len(dataset.ns_tr_subj))
+        print("\tUnique transitive objects:\t\t%d" % len(dataset.ns_tr_obj))
 
         return dataset
 
@@ -64,19 +67,28 @@ class Dataset:
         self.ns_dict = dict()
         self.vs = list()
         self.vs_dict = dict()
+
         self.ns_in_subj = list()
         self.ns_in_subj_dict = dict()
+        self.ns_tr_subj = list()
+        self.ns_tr_subj_dict = dict()
+        self.ns_tr_obj = list()
+        self.ns_tr_obj_dict = dict()
 
-        self.f_n_train = list()
-        self.f_v_train = list()
+        self.f_n = list()
+        self.f_v = list()
         self.f_in_subj = list()
 
-        self.ys_train = list()  # v,n pairs
-        self.ys_train_dict = dict()
-        self.f_ys_train = list()  # frequencies
+        self.ys = list()  # v,n pairs
+        self.ys_dict = dict()
+        self.f_ys = list()  # frequencies
 
-        self.ys_train_per_v = defaultdict(list)
-        self.ys_train_per_n = defaultdict(list)
+        self.ws = list()  # n, n pairs
+        self.ws_dict = dict()
+        self.f_ws = list()
+
+        self.ys_per_v = defaultdict(list)
+        self.ys_per_n = defaultdict(list)
 
         self.ys_test = list()  # v,n pairs
         self.ys_test_dict = dict()
@@ -86,6 +98,8 @@ class Dataset:
             n_lines = len(lines)
         else:
             n_lines = max_lines
+
+        prev_n_tr_subj = None
 
         for i, ln in enumerate(lines):
 
@@ -97,18 +111,18 @@ class Dataset:
                 stdout.flush()
 
             if len(ln) == 2:
-                self.process_line(ln, i, n_lines)
+                prev_n_tr_subj = self.process_line(ln, i, n_lines, prev_n_tr_subj)
 
         self.n_vs = len(self.vs)
         self.n_ns = len(self.ns)
-        self.n_ys_train = len(self.ys_train)
+        self.n_ys = len(self.ys)
         self.n_ys_test = len(self.ys_test)
 
         print("\rDataset read")
 
         self.store(file_path, max_lines)
 
-    def process_line(self, ln, i, n_lines):
+    def process_line(self, ln, i, n_lines, prev_n_tr_subj=None):
 
         vt, nt = ln
         is_train = i < n_lines - self.n_test_pairs
@@ -121,27 +135,27 @@ class Dataset:
             n = len(self.ns)
             self.ns.append(nt)
             self.ns_dict[nt] = n
-            self.f_n_train.append(1 if is_train else 0)
+            self.f_n.append(1 if is_train else 0)
         else:
             n = self.ns_dict[nt]
-            if is_train: self.f_n_train[n] += 1
+            if is_train: self.f_n[n] += 1
 
         if vt not in self.vs_dict:
             v = len(self.vs)
             self.vs.append(vt)
             self.vs_dict[vt] = v
-            self.f_v_train.append(1 if is_train else 0)
+            self.f_v.append(1 if is_train else 0)
         else:
             v = self.vs_dict[vt]
-            if is_train: self.f_v_train[v] += 1
+            if is_train: self.f_v[v] += 1
 
         if is_train:
-            y = self.process_pair(n, v, self.ys_train, self.ys_train_dict, self.f_ys_train)
+            y = self.process_pair(n, v, self.ys, self.ys_dict, self.f_ys)
 
-            if y not in self.ys_train_per_v[v]:
-                self.ys_train_per_v[v].append(y)
-            if y not in self.ys_train_per_n[n]:
-                self.ys_train_per_n[n].append(y)
+            if y not in self.ys_per_v[v]:
+                self.ys_per_v[v].append(y)
+            if y not in self.ys_per_n[n]:
+                self.ys_per_n[n].append(y)
         else:
             self.process_pair(n, v, self.ys_test, self.ys_test_dict, self.f_ys_test)
 
@@ -149,15 +163,52 @@ class Dataset:
         # Datastructures for step 2
         # -------------------------
 
+        n_tr_obj = None
+        n_tr_subj = prev_n_tr_subj
+
         # Subject of an intransitive verb
         if vt.endswith('s_nsubj'):
             if nt not in self.ns_in_subj_dict:
                 n_in_subj = len(self.ns_in_subj)
+                self.ns_in_subj_dict[nt] = n_in_subj
                 self.ns_in_subj.append(nt)
                 self.f_in_subj.append(1 if is_train else 0)
             else:
                 n_in_subj = self.ns_in_subj_dict[nt]
                 if is_train: self.f_in_subj[n_in_subj] += 1
+
+        # Subject of an transitive verb
+        elif vt.endswith('so_nsubj'):
+            if nt not in self.ns_tr_subj:
+                n_tr_subj = len(self.ns_tr_subj)
+                self.ns_tr_subj_dict[nt] = n_tr_subj
+                self.ns_tr_subj.append(nt)
+            else:
+                n_tr_subj = self.ns_tr_subj_dict[nt]
+
+        # Object of an transitive verb
+        elif vt.endswith('so_dobj'):
+            if nt not in self.ns_tr_obj:
+                n_tr_obj = len(self.ns_tr_obj)
+                self.ns_tr_obj_dict[nt] = n_tr_obj
+                self.ns_tr_obj.append(nt)
+            else:
+                n_tr_obj = self.ns_tr_obj_dict[nt]
+
+        if n_tr_obj is not None and n_tr_subj is not None and is_train:
+
+            wp = (n_tr_subj, n_tr_obj)
+
+            if wp not in self.ws_dict:
+                w = len(self.ws)
+                self.ws.append(wp)
+                self.f_ws.append(1)
+                self.ws_dict[wp] = w
+            else:
+                w = self.ws_dict[wp]
+                self.f_ws[w] += 1
+
+        return n_tr_subj
 
     def process_pair(self, n, v, ys, ys_dict, f_ys):
 
@@ -173,16 +224,6 @@ class Dataset:
             f_ys[y] += 1
 
         return y
-
-    def __getstate__(self):
-        """Return state values to be pickled."""
-        return self.ns, self.vs, self.f_n_train, self.f_v_train, self.f_ys_train, self.ys_train, self.ys_train_dict, self.ys_train_per_v, self.ys_train_per_n, \
-               self.f_ys_test, self.ys_test, self.ys_test_dict, self.n_vs, self.n_ns, self.n_ys_train, self.n_ys_test
-
-    def __setstate__(self, state):
-        """Restore state from the unpickled state values."""
-        self.ns, self.vs, self.f_n_train, self.f_v_train, self.f_ys_train, self.ys_train, self.ys_train_dict, self.ys_train_per_v, self.ys_train_per_n, \
-        self.f_ys_test, self.ys_test, self.ys_test_dict, self.n_vs, self.n_ns, self.n_ys_train, self.n_ys_test = state
 
     def store(self, file_path, max_lines):
         """
@@ -256,9 +297,9 @@ class LSCVerbClasses:
         Train the algorithm
         """
 
-        ys_v = [v for (v, n) in self.dataset.ys_train]
-        ys_n = [n for (v, n) in self.dataset.ys_train]
-        f_ys = np.array(self.dataset.f_ys_train)
+        ys_v = [v for (v, n) in self.dataset.ys]
+        ys_n = [n for (v, n) in self.dataset.ys]
+        f_ys = np.array(self.dataset.f_ys)
 
         evaluator = EvaluationPseudoDisambiguation(self.dataset, self, lower_bound=30)
 
@@ -300,16 +341,16 @@ class LSCVerbClasses:
 
         for v in range(self.dataset.n_vs):
             # Sigma_y in {v} X N f(y)p(x|y) / d
-            ys_per_v = self.dataset.ys_train_per_v[v]
+            ys_per_v = self.dataset.ys_per_v[v]
             p_vc_1[v, :] = np.sum(f_ys[ys_per_v] * p_c_vn[:, ys_per_v], axis=1) / d
 
         for n in range(self.dataset.n_ns):
             # Sigma_y in N X {v} f(y)p(x|y) / d
-            ys_per_n = self.dataset.ys_train_per_n[n]
+            ys_per_n = self.dataset.ys_per_n[n]
             p_nc_1[n, :] = np.sum(f_ys[ys_per_n] * p_c_vn[:, ys_per_n], axis=1) / d
 
         # d / |Y|
-        p_c_1 = d / self.dataset.n_ys_train
+        p_c_1 = d / self.dataset.n_ys
 
         self.p_c = p_c_1
         self.p_vc = p_vc_1
@@ -365,10 +406,10 @@ class EvaluationPseudoDisambiguation:
         for i, (v, n) in enumerate(self.dataset.ys_test):
 
             # don't consider if upper or lower bound limits are not satisfied
-            if self.dataset.f_n_train[n] < self.lower_bound or self.dataset.f_n_train[n] > self.upper_bound:
+            if self.dataset.f_n[n] < self.lower_bound or self.dataset.f_n[n] > self.upper_bound:
                 continue
 
-            if self.dataset.f_v_train[v] < self.lower_bound or self.dataset.f_v_train[v] > self.upper_bound:
+            if self.dataset.f_v[v] < self.lower_bound or self.dataset.f_v[v] > self.upper_bound:
                 continue
 
             # select v' until one found that satisfies requirements
@@ -379,12 +420,12 @@ class EvaluationPseudoDisambiguation:
                 yp = (v_considered, n)
 
                 # don't consider if upper or lower bound limits are not satisfied
-                if self.dataset.f_v_train[v_considered] < self.lower_bound or \
-                   self.dataset.f_v_train[v_considered] > self.upper_bound:
+                if self.dataset.f_v[v_considered] < self.lower_bound or \
+                   self.dataset.f_v[v_considered] > self.upper_bound:
                     continue
 
                 # can't be in the train or test set icm with n
-                if yp in self.dataset.ys_train_dict or yp in self.dataset.ys_test_dict:
+                if yp in self.dataset.ys_dict or yp in self.dataset.ys_test_dict:
                     continue
 
                 v_accent = v_considered
@@ -465,7 +506,7 @@ class SubjectIntransitiveVerbClasses:
         d = np.sum(f_ys * p_c_vn, axis=1)
 
         # d / |Y|
-        p_c_1 = d / self.dataset.n_ys_train
+        p_c_1 = d / self.dataset.n_ys
 
         self.p_c = p_c_1
 
