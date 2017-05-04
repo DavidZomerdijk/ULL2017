@@ -164,52 +164,54 @@ class Dataset:
         # Datastructures for step 2
         # -------------------------
 
-        n_tr_obj = None
-        n_tr_subj = prev_n_tr_subj
+        if is_train:
 
-        # Subject of an intransitive verb
-        if vt.endswith('s_nsubj'):
-            if nt not in self.ns_in_subj_dict:
-                n_in_subj = n
-                self.ns_in_subj_dict[nt] = (n_in_subj, len(self.ns_in_subj))
-                self.ns_in_subj.append(n_in_subj)
-                self.f_in_subj.append(1 if is_train else 0)
-            else:
-                n_in_subj, n_in_subj_i = self.ns_in_subj_dict[nt]
-                if is_train: self.f_in_subj[n_in_subj_i] += 1
+            n_tr_obj = None
+            n_tr_subj = prev_n_tr_subj
 
-        # Subject of an transitive verb
-        elif vt.endswith('so_nsubj'):
-            if nt not in self.ns_tr_subj_dict:
-                n_tr_subj = n
-                self.ns_tr_subj_dict[nt] = n_tr_subj
-                self.ns_tr_subj.append(n_tr_subj)
-            else:
-                n_tr_subj = self.ns_tr_subj_dict[nt]
+            # Subject of an intransitive verb
+            if vt.endswith('s_nsubj'):
+                if nt not in self.ns_in_subj_dict:
+                    n_in_subj = n
+                    self.ns_in_subj_dict[nt] = (n_in_subj, len(self.ns_in_subj))
+                    self.ns_in_subj.append(n_in_subj)
+                    self.f_in_subj.append(1)
+                else:
+                    n_in_subj, n_in_subj_i = self.ns_in_subj_dict[nt]
+                    self.f_in_subj[n_in_subj_i] += 1
 
-        # Object of an transitive verb
-        elif vt.endswith('so_dobj'):
-            if nt not in self.ns_tr_obj_dict:
-                n_tr_obj = n
-                self.ns_tr_obj_dict[nt] = n_tr_obj
-                self.ns_tr_obj.append(n_tr_obj)
-            else:
-                n_tr_obj = self.ns_tr_obj_dict[nt]
+            # Subject of an transitive verb
+            elif vt.endswith('so_nsubj'):
+                if nt not in self.ns_tr_subj_dict:
+                    n_tr_subj = n
+                    self.ns_tr_subj_dict[nt] = n_tr_subj
+                    self.ns_tr_subj.append(n_tr_subj)
+                else:
+                    n_tr_subj = self.ns_tr_subj_dict[nt]
 
-        if n_tr_obj is not None and n_tr_subj is not None and is_train:
+            # Object of an transitive verb
+            elif vt.endswith('so_dobj'):
+                if nt not in self.ns_tr_obj_dict:
+                    n_tr_obj = n
+                    self.ns_tr_obj_dict[nt] = n_tr_obj
+                    self.ns_tr_obj.append(n_tr_obj)
+                else:
+                    n_tr_obj = self.ns_tr_obj_dict[nt]
 
-            wp = (n_tr_subj, n_tr_obj)
+            if n_tr_obj is not None and n_tr_subj is not None:
 
-            if wp not in self.ws_dict:
-                w = len(self.ws)
-                self.ws.append(wp)
-                self.f_ws.append(1)
-                self.ws_dict[wp] = w
-            else:
-                w = self.ws_dict[wp]
-                self.f_ws[w] += 1
+                wp = (n_tr_subj, n_tr_obj)
 
-        return n_tr_subj
+                if wp not in self.ws_dict:
+                    w = len(self.ws)
+                    self.ws.append(wp)
+                    self.f_ws.append(1)
+                    self.ws_dict[wp] = w
+                else:
+                    w = self.ws_dict[wp]
+                    self.f_ws[w] += 1
+
+            return n_tr_subj
 
     def process_pair(self, n, v, ys, ys_dict, f_ys):
 
@@ -468,8 +470,17 @@ class SubjectIntransitiveVerbClasses:
         self.em_iters = em_iters
         self.name = name
         self.current_iter = 0
+        self.likelihoods = list()
 
         self.p_c = self.initialize_parameters()
+
+    def __getstate__(self):
+        """Return state values to be pickled."""
+        return self.em_iters, self.current_iter, self.name, self.likelihoods, self.p_c
+
+    def __setstate__(self, state):
+        """Restore state from the unpickled state values."""
+        self.em_iters, self.current_iter, self.name, self.likelihoods, self.p_c = state
 
     def initialize_parameters(self):
         """
@@ -494,6 +505,8 @@ class SubjectIntransitiveVerbClasses:
             self.current_iter = i
 
             likelihood = self.em_iter(fs)
+            self.likelihoods.append(likelihood)
+
             print('%i: Log-likelihood: %f' % (i, likelihood))
 
             if i % 10 == 0:
@@ -547,8 +560,17 @@ class SubjectObjectTransitiveVerbClasses:
         self.em_iters = em_iters
         self.name = name
         self.current_iter = 0
+        self.likelihoods = list()
 
         self.p_c = self.initialize_parameters()
+
+    def __getstate__(self):
+        """Return state values to be pickled."""
+        return self.em_iters, self.current_iter, self.name, self.likelihoods, self.p_c
+
+    def __setstate__(self, state):
+        """Restore state from the unpickled state values."""
+        self.em_iters, self.current_iter, self.name, self.likelihoods, self.p_c = state
 
     def initialize_parameters(self):
         """
@@ -575,6 +597,8 @@ class SubjectObjectTransitiveVerbClasses:
             self.current_iter = i
 
             likelihood = self.em_iter(fs, ws_s, ws_o)
+            self.likelihoods.append(likelihood)
+
             print('%i: Log-likelihood: %f' % (i, likelihood))
 
             if i % 10 == 0:
@@ -619,23 +643,23 @@ def main():
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
 
-    dataset = Dataset.load(gold_corpus, n_test_pairs=0)
+    dataset = Dataset.load(gold_corpus, n_test_pairs=300)
 
     parameters = [
-        # (5, 51),
-        # (10, 51),
-        # (20, 51),
-        # (30, 51),
-        (30, 10),
-        # (40, 51),
-        # (50, 51),
-        # (75, 51),
-        # (100, 51),
-        # (200, 51),
-        # (300, 51)
+        (5, 51),
+        (10, 51),
+        (20, 51),
+        (30, 51),
+        (40, 51),
+        (50, 51),
+        (75, 51),
+        (100, 51),
+        (200, 51),
+        (300, 51)
     ]
 
     for (n_cs, em_itters) in parameters:
+        print("------ Clusters: %d ------" % (n_cs))
         print("------ Step 1 ------")
         step1 = LSCVerbClasses(dataset, n_cs=n_cs, em_iters=em_itters, name='all_pairs_lcs')
         step1.train()
