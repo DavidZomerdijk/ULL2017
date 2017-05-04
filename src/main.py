@@ -170,29 +170,29 @@ class Dataset:
         # Subject of an intransitive verb
         if vt.endswith('s_nsubj'):
             if nt not in self.ns_in_subj_dict:
-                n_in_subj = len(self.ns_in_subj)
-                self.ns_in_subj_dict[nt] = n_in_subj
-                self.ns_in_subj.append(nt)
+                n_in_subj = n
+                self.ns_in_subj_dict[nt] = (n_in_subj, len(self.ns_in_subj))
+                self.ns_in_subj.append(n_in_subj)
                 self.f_in_subj.append(1 if is_train else 0)
             else:
-                n_in_subj = self.ns_in_subj_dict[nt]
-                if is_train: self.f_in_subj[n_in_subj] += 1
+                n_in_subj, n_in_subj_i = self.ns_in_subj_dict[nt]
+                if is_train: self.f_in_subj[n_in_subj_i] += 1
 
         # Subject of an transitive verb
         elif vt.endswith('so_nsubj'):
-            if nt not in self.ns_tr_subj:
-                n_tr_subj = len(self.ns_tr_subj)
+            if nt not in self.ns_tr_subj_dict:
+                n_tr_subj = n
                 self.ns_tr_subj_dict[nt] = n_tr_subj
-                self.ns_tr_subj.append(nt)
+                self.ns_tr_subj.append(n_tr_subj)
             else:
                 n_tr_subj = self.ns_tr_subj_dict[nt]
 
         # Object of an transitive verb
         elif vt.endswith('so_dobj'):
-            if nt not in self.ns_tr_obj:
-                n_tr_obj = len(self.ns_tr_obj)
+            if nt not in self.ns_tr_obj_dict:
+                n_tr_obj = n
                 self.ns_tr_obj_dict[nt] = n_tr_obj
-                self.ns_tr_obj.append(nt)
+                self.ns_tr_obj.append(n_tr_obj)
             else:
                 n_tr_obj = self.ns_tr_obj_dict[nt]
 
@@ -457,7 +457,7 @@ class SubjectIntransitiveVerbClasses:
     Verb classes (corresponding to Section 4.1 in the paper https://arxiv.org/abs/cs/9905008)
     """
 
-    def __init__(self, dataset, model, v, em_iters=50):
+    def __init__(self, dataset, model, em_iters=50, name='step2'):
         """
         :param dataset: The dataset for which to train
         :param n_cs: Number of classes
@@ -466,7 +466,8 @@ class SubjectIntransitiveVerbClasses:
         self.dataset = dataset
         self.model = model
         self.em_iters = em_iters
-        self.v = v
+        self.name = name
+        self.current_iter = 0
 
         self.p_c = self.initialize_parameters()
 
@@ -486,32 +487,47 @@ class SubjectIntransitiveVerbClasses:
         """
         Train the algorithm
         """
+
+        fs = np.array(self.dataset.f_in_subj)
+
         for i in range(self.em_iters):
-            likelihood = self.em_iter(i)
+            self.current_iter = i
+
+            likelihood = self.em_iter(fs)
             print('%i: Log-likelihood: %f' % (i, likelihood))
 
-    def em_iter(self):
+            if i % 10 == 0:
+                self.store()
+
+    def em_iter(self, fs):
         """
         Do an EM step
         :param i: iteration
         :return: log-likelihood
         """
 
-        p_c_vn = (self.p_c * self.p_nc[ys_n, :]).T
-        p_vn = np.sum(p_c_vn, axis=0)  # P(v, n)
-        p_c_vn /= p_vn  # P(c|v, n)
+        p_c_n = (self.p_c * self.model.p_nc[self.dataset.ns_in_subj, :]).T # p(c)P_LC(n|c)
+        p_n = np.sum(p_c_n, axis=0)  # P(n)
+        p_c_n /= p_n  # P(c|n)
 
-        likelihood = np.sum(f_ys * np.log(p_vn))
+        likelihood = np.sum(fs * np.log(p_n))
 
-        # d = Sigma_y f(y)p(x|y)
-        d = np.sum(f_ys * p_c_vn, axis=1)
-
-        # d / |Y|
-        p_c_1 = d / self.dataset.n_ys
-
-        self.p_c = p_c_1
+        self.p_c = np.sum(fs * p_c_n, axis=1) / np.sum(fs)
 
         return likelihood
+
+    def store(self):
+        """
+        Function to save the class
+        :param file_name:
+        :return:
+        """
+        out_path = path.join(
+            path.dirname(__file__), '..', 'out',
+            '%s-%d-%d.pkl' % (self.name, self.model.n_cs, self.current_iter)
+        )
+
+        pickle.dump(self, open(out_path, 'wb'))
 
 
 def main():
@@ -521,24 +537,30 @@ def main():
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
 
-    dataset = Dataset.load(all_pairs, n_test_pairs=3000)
+    dataset = Dataset.load(all_pairs, n_test_pairs=0)
 
     parameters = [
-        (5, 51),
-        (10, 51),
-        (20, 51),
-        (30, 51),
-        (40, 51),
-        (50, 51),
-        (75, 51),
-        (100, 51),
-        (200, 51),
-        (300, 51)
+        # (5, 51),
+        # (10, 51),
+        # (20, 51),
+        # (30, 51),
+        (30, 10),
+        # (40, 51),
+        # (50, 51),
+        # (75, 51),
+        # (100, 51),
+        # (200, 51),
+        # (300, 51)
     ]
 
     for (n_cs, em_itters) in parameters:
-        print("------")
-        LSCVerbClasses(dataset, n_cs=n_cs, em_iters=em_itters, name='all_pairs').train()
+        print("------ Step 1 ------")
+        step1 = LSCVerbClasses(dataset, n_cs=n_cs, em_iters=em_itters, name='all_pairs_lcs')
+        step1.train()
+        print("------ Step 2 ------")
+        step2_1 = SubjectIntransitiveVerbClasses(dataset, step1, em_iters=em_itters, name='all_pairs_intransitive_class')
+        step2_1.train()
+
 
 if __name__ == "__main__":
     main()
