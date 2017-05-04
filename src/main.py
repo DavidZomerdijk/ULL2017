@@ -579,7 +579,7 @@ class SubjectObjectTransitiveVerbClasses:
         """
         np.random.seed(1)
 
-        p_c = np.random.rand((self.model.n_cs, self.model.n_cs))
+        p_c = np.random.rand(self.model.n_cs, self.model.n_cs)
         p_c /= np.sum(p_c)
 
         return p_c
@@ -610,16 +610,18 @@ class SubjectObjectTransitiveVerbClasses:
         :return: log-likelihood
         """
 
-        p_nc1 = np.tile(self.model.p_nc[ws_s, :], (1, 1, self.model.n_cs))
-        p_nc2 = np.tile(self.model.p_nc[ws_o, :], (1, 1, self.model.n_cs))
+        p_nc1 = np.expand_dims(self.model.p_nc[ws_s, :], axis=2)
+        p_nc2 = np.expand_dims(self.model.p_nc[ws_o, :], axis=1)
 
-        p_c_n = (self.p_c * p_nc1 * p_nc2).T # p(c)P_LC(n1|c1)P_LC(n2|c2)
+        p_nc_dot = (p_nc1 * p_nc2)
+
+        p_c_n = (self.p_c * p_nc_dot).T # p(c)P_LC(n1|c1)P_LC(n2|c2)
         p_n = np.sum(p_c_n, axis=(0, 1)) # P(n1,n2)
         p_c_n /= p_n  # P(c1,c2|n1,n2)
 
         likelihood = np.sum(fs * np.log(p_n))
 
-        self.p_c = np.sum(fs * p_c_n, axis=1) / np.sum(fs)
+        self.p_c = np.sum(fs * p_c_n, axis=2) / np.sum(fs)
 
         return likelihood
 
@@ -667,7 +669,7 @@ def main():
         step2_1 = SubjectIntransitiveVerbClasses(dataset, step1, em_iters=em_itters, name='all_pairs_intransitive_class')
         step2_1.train()
         print("------ Step 2 - Transitive ------")
-        step2_2 = SubjectIntransitiveVerbClasses(dataset, step1, em_iters=em_itters, name='all_pairs_transitive_class')
+        step2_2 = SubjectObjectTransitiveVerbClasses(dataset, step1, em_iters=em_itters, name='all_pairs_transitive_class')
         step2_2.train()
 
 
