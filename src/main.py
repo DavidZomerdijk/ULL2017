@@ -457,7 +457,7 @@ class SubjectIntransitiveVerbClasses:
     Verb classes (corresponding to Section 4.1 in the paper https://arxiv.org/abs/cs/9905008)
     """
 
-    def __init__(self, dataset, model, em_iters=50, name='step2'):
+    def __init__(self, dataset, model, em_iters=50, name='step2-1'):
         """
         :param dataset: The dataset for which to train
         :param n_cs: Number of classes
@@ -502,7 +502,6 @@ class SubjectIntransitiveVerbClasses:
     def em_iter(self, fs):
         """
         Do an EM step
-        :param i: iteration
         :return: log-likelihood
         """
 
@@ -530,6 +529,89 @@ class SubjectIntransitiveVerbClasses:
         pickle.dump(self, open(out_path, 'wb'))
 
 
+class SubjectObjectTransitiveVerbClasses:
+    """
+    Clustering for subjects and objects for transitive verbs
+    This is the implementation of Step 2
+    Verb classes (corresponding to Section 4.2 in the paper https://arxiv.org/abs/cs/9905008)
+    """
+
+    def __init__(self, dataset, model, em_iters=50, name='step2-2'):
+        """
+        :param dataset: The dataset for which to train
+        :param n_cs: Number of classes
+        :param em_iters: Iterations
+        """
+        self.dataset = dataset
+        self.model = model
+        self.em_iters = em_iters
+        self.name = name
+        self.current_iter = 0
+
+        self.p_c = self.initialize_parameters()
+
+    def initialize_parameters(self):
+        """
+        Initialize theta parameters
+        :return:
+        """
+        np.random.seed(1)
+
+        p_c = np.random.rand((self.model.n_cs, self.model.n_cs))
+        p_c /= np.sum(p_c)
+
+        return p_c
+
+    def train(self):
+        """
+        Train the algorithm
+        """
+
+        fs = np.array(self.dataset.f_ws)
+        ws_s = [s for (s, o) in self.dataset.ws]
+        ws_o = [o for (s, o) in self.dataset.ws]
+
+        for i in range(self.em_iters):
+            self.current_iter = i
+
+            likelihood = self.em_iter(fs, ws_s, ws_o)
+            print('%i: Log-likelihood: %f' % (i, likelihood))
+
+            if i % 10 == 0:
+                self.store()
+
+    def em_iter(self, fs, ws_s, ws_o):
+        """
+        Do an EM step
+        :return: log-likelihood
+        """
+
+        p_nc1 = np.tile(self.model.p_nc[ws_s, :], (1, 1, self.model.n_cs))
+        p_nc2 = np.tile(self.model.p_nc[ws_o, :], (1, 1, self.model.n_cs))
+
+        p_c_n = (self.p_c * p_nc1 * p_nc2).T # p(c)P_LC(n1|c1)P_LC(n2|c2)
+        p_n = np.sum(p_c_n, axis=(0, 1)) # P(n1,n2)
+        p_c_n /= p_n  # P(c1,c2|n1,n2)
+
+        likelihood = np.sum(fs * np.log(p_n))
+
+        self.p_c = np.sum(fs * p_c_n, axis=1) / np.sum(fs)
+
+        return likelihood
+
+    def store(self):
+        """
+        Function to save the class
+        :param file_name:
+        :return:
+        """
+        out_path = path.join(
+            path.dirname(__file__), '..', 'out',
+            '%s-%d-%d.pkl' % (self.name, self.model.n_cs, self.current_iter)
+        )
+
+        pickle.dump(self, open(out_path, 'wb'))
+
 def main():
     """Program entry point"""
 
@@ -537,7 +619,7 @@ def main():
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
 
-    dataset = Dataset.load(all_pairs, n_test_pairs=0)
+    dataset = Dataset.load(gold_corpus, n_test_pairs=0)
 
     parameters = [
         # (5, 51),
@@ -557,9 +639,12 @@ def main():
         print("------ Step 1 ------")
         step1 = LSCVerbClasses(dataset, n_cs=n_cs, em_iters=em_itters, name='all_pairs_lcs')
         step1.train()
-        print("------ Step 2 ------")
+        print("------ Step 2 - Intransitive ------")
         step2_1 = SubjectIntransitiveVerbClasses(dataset, step1, em_iters=em_itters, name='all_pairs_intransitive_class')
         step2_1.train()
+        print("------ Step 2 - Transitive ------")
+        step2_2 = SubjectIntransitiveVerbClasses(dataset, step1, em_iters=em_itters, name='all_pairs_transitive_class')
+        step2_2.train()
 
 
 if __name__ == "__main__":
