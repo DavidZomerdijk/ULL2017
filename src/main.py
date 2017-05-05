@@ -7,6 +7,17 @@ import numpy as np
 import pickle
 
 
+"""
+This file contains the entire implementation of "Inducing a Semantically Annotated Lexicon via EM-Based Clustering"
+
+The implementation was written by:
+[Maurits Bleeker](https://github.com/MBleeker)
+[Thijs Scheepers](http://github.com/tscheepers)
+[David Zomerdijk](https://github.com/DavidZomerdijk)
+
+Make sure the `data` directory contains the `all_pairs` file before running.
+"""
+
 class Dataset:
     """
     This class contains all needed information from the dataset
@@ -645,6 +656,7 @@ def main():
 
     dataset = Dataset.load(all_pairs, n_test_pairs=3000)
 
+    # Parameter grid
     parameters = [
         (5, 51),
         (10, 51),
@@ -658,16 +670,18 @@ def main():
         (300, 51)
     ]
 
-    for (n_cs, em_itters) in parameters:
+    # Running the experiment for all parameters in the grid
+    for (n_cs, em_iters) in parameters:
         print("------ Clusters: %d ------" % (n_cs))
         print("------ Step 1 ------")
-        step1 = LSCVerbClasses(dataset, n_cs=n_cs, em_iters=em_itters, name='all_pairs_lcs')
+        # Step one also evaluates in between runs
+        step1 = LSCVerbClasses(dataset, n_cs=n_cs, em_iters=em_iters, name='all_pairs_lcs')
         step1.train()
         print("------ Step 2 - Intransitive ------")
-        step2_1 = SubjectIntransitiveVerbClasses(dataset, step1, em_iters=em_itters, name='all_pairs_intransitive_class')
+        step2_1 = SubjectIntransitiveVerbClasses(dataset, step1, em_iters=em_iters, name='all_pairs_intransitive_class')
         step2_1.train()
         print("------ Step 2 - Transitive ------")
-        step2_2 = SubjectObjectTransitiveVerbClasses(dataset, step1, em_iters=em_itters, name='all_pairs_transitive_class')
+        step2_2 = SubjectObjectTransitiveVerbClasses(dataset, step1, em_iters=em_iters, name='all_pairs_transitive_class')
         step2_2.train()
 
 
