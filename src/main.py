@@ -5,6 +5,7 @@ from os import path
 from sys import stdout
 import numpy as np
 import pickle
+from nltk.stem.porter import *
 
 
 """
@@ -42,6 +43,8 @@ class Dataset:
 
         print("Dataset ready")
         print("\tUnique verbs:\t%d" % dataset.n_vs)
+        print("\tUnique verb-pos tags:\t%d" % dataset.n_ps)
+        print("\tUnique verb-pos combinations:\t%d" % dataset.n_vps)
         print("\tUnique nouns:\t%d" % dataset.n_ns)
         print("\tUnique verb-noun pairs (train):\t%d" % dataset.n_ys)
         print("\tUnique verb-noun pairs (test):\t%d" % dataset.n_ys_test)
@@ -76,21 +79,30 @@ class Dataset:
         self.n_test_pairs = n_test_pairs
 
         # Token-index lookup
-        self.ns = list()
-        self.ns_dict = dict()
+        self.vps = list()
+        self.vps_dict = dict()
+        self.f_vp = list()
+
         self.vs = list()
         self.vs_dict = dict()
+        self.f_v = list()
+
+        self.ps = list()
+        self.ps_dict = dict()
+        self.f_p = list()
+
+        self.ns = list()
+        self.ns_dict = dict()
+        self.f_n = list()
 
         self.ns_in_subj = list()
         self.ns_in_subj_dict = dict()
+        self.f_in_subj = list()
+
         self.ns_tr_subj = list()
         self.ns_tr_subj_dict = dict()
         self.ns_tr_obj = list()
         self.ns_tr_obj_dict = dict()
-
-        self.f_n = list()
-        self.f_v = list()
-        self.f_in_subj = list()
 
         self.ys = list()  # v,n pairs
         self.ys_dict = dict()
@@ -100,20 +112,24 @@ class Dataset:
         self.ws_dict = dict()
         self.f_ws = list()
 
-        self.ys_per_v = defaultdict(list)
+        self.ys_per_vp = defaultdict(list)
         self.ys_per_n = defaultdict(list)
 
         self.ys_test = list()  # v,n pairs
         self.ys_test_dict = dict()
         self.f_ys_test = list()  # frequencies
 
-        self.auxiliary_verb = [
+        # We will filter these auxiliary verbs
+        self.aux_vts = [
             'am', 'are', 'is', 'was', 'were', 'being',
             'been', 'be', 'can', 'could', 'dare', 'do',
             'does', 'did', 'have', 'has', 'had', 'having',
             'may', 'might', 'must', 'need', 'ought',
             'shall', 'should', 'will', 'would',
-       ]
+        ]
+
+        # We will stem verbs
+        self.stemmer = PorterStemmer()
 
         if max_lines is None or max_lines > len(lines):
             n_lines = len(lines)
@@ -131,10 +147,12 @@ class Dataset:
                 stdout.write("\rReading corpus… %6.2f%%" % ((100 * i) / float(n_lines),))
                 stdout.flush()
 
-            if len(ln) == 2:
+            if len(ln) == 2:  # Only consider lines with two words on them, e.g. "take_so_dobj you"
                 prev_n_tr_subj = self.process_line(ln, i, n_lines, prev_n_tr_subj)
 
+        self.n_vps = len(self.vps)
         self.n_vs = len(self.vs)
+        self.n_ps = len(self.ps)
         self.n_ns = len(self.ns)
         self.n_ys = len(self.ys)
         self.n_ys_test = len(self.ys_test)
@@ -143,16 +161,40 @@ class Dataset:
 
         self.store(file_path, max_lines)
 
+    def preprocess_line(self, ln, lowercase=True, stem_verbs=True, lump_digits=True, sep='_'):
+
+        vpt, nt = ln
+
+        # We split the vpt: "earning_so_nsubj" into vt: "earning" and pt: "so_nsubj"
+        vpt_s = vpt.split(sep)
+        pt = sep.join(vpt_s[-2:])
+        vt = sep.join(vpt_s[:-2])
+
+        if lowercase:
+            vt = vt.lower()
+
+        # We stem "earning" to "earn"
+        if stem_verbs and self.stemmer is not None:
+            vt = self.stemmer.stem(vt)
+
+        vpt = vt + '_' + pt
+
+        if lowercase:
+            nt = nt.lower()
+
+        # We replace all digits with DIGIT and treat them equally
+        if lump_digits and nt.isdigit():
+            nt = 'DIGIT'
+
+        return vpt, nt, vt, pt
+
     def process_line(self, ln, i, n_lines, prev_n_tr_subj=None):
 
-        vt, nt = ln
         is_train = i < n_lines - self.n_test_pairs
 
-        vt_s = vt.split('_')
-        verb = '_'.join(vt_s[-2:])
+        vpt, nt, vt, pt = self.preprocess_line(ln)
 
-
-        if verb not in self.auxiliary_verb:
+        if vt in self.aux_vts:
             return None
 
         # -------------------------
@@ -168,6 +210,15 @@ class Dataset:
             n = self.ns_dict[nt]
             if is_train: self.f_n[n] += 1
 
+        if vpt not in self.vps_dict:
+            vp = len(self.vps)
+            self.vps.append(vpt)
+            self.vps_dict[vpt] = vp
+            self.f_vp.append(1 if is_train else 0)
+        else:
+            vp = self.vps_dict[vpt]
+            if is_train: self.f_vp[vp] += 1
+
         if vt not in self.vs_dict:
             v = len(self.vs)
             self.vs.append(vt)
@@ -177,15 +228,24 @@ class Dataset:
             v = self.vs_dict[vt]
             if is_train: self.f_v[v] += 1
 
-        if is_train:
-            y = self.process_pair(n, v, self.ys, self.ys_dict, self.f_ys)
+        if pt not in self.ps_dict:
+            p = len(self.ps)
+            self.ps.append(pt)
+            self.ps_dict[pt] = p
+            self.f_p.append(1 if is_train else 0)
+        else:
+            p = self.ps_dict[pt]
+            if is_train: self.f_p[p] += 1
 
-            if y not in self.ys_per_v[v]:
-                self.ys_per_v[v].append(y)
+        if is_train:
+            y = self.process_pair(n, vp, self.ys, self.ys_dict, self.f_ys)
+
+            if y not in self.ys_per_vp[vp]:
+                self.ys_per_vp[vp].append(y)
             if y not in self.ys_per_n[n]:
                 self.ys_per_n[n].append(y)
         else:
-            self.process_pair(n, v, self.ys_test, self.ys_test_dict, self.f_ys_test)
+            self.process_pair(n, vp, self.ys_test, self.ys_test_dict, self.f_ys_test)
 
         # -------------------------
         # Datastructures for step 2
@@ -197,7 +257,7 @@ class Dataset:
             n_tr_subj = prev_n_tr_subj
 
             # Subject of an intransitive verb
-            if vt.endswith('s_nsubj'):
+            if pt == 's_nsubj':
                 if nt not in self.ns_in_subj_dict:
                     n_in_subj = n
                     self.ns_in_subj_dict[nt] = (n_in_subj, len(self.ns_in_subj))
@@ -208,7 +268,7 @@ class Dataset:
                     self.f_in_subj[n_in_subj_i] += 1
 
             # Subject of an transitive verb
-            elif vt.endswith('so_nsubj'):
+            elif pt == 'so_nsubj':
                 if nt not in self.ns_tr_subj_dict:
                     n_tr_subj = n
                     self.ns_tr_subj_dict[nt] = n_tr_subj
@@ -217,7 +277,7 @@ class Dataset:
                     n_tr_subj = self.ns_tr_subj_dict[nt]
 
             # Object of an transitive verb
-            elif vt.endswith('so_dobj'):
+            elif pt == 'so_dobj':
                 if nt not in self.ns_tr_obj_dict:
                     n_tr_obj = n
                     self.ns_tr_obj_dict[nt] = n_tr_obj
@@ -240,9 +300,9 @@ class Dataset:
 
             return n_tr_subj
 
-    def process_pair(self, n, v, ys, ys_dict, f_ys):
+    def process_pair(self, n, vp, ys, ys_dict, f_ys):
 
-        yp = (v, n)
+        yp = (vp, n)
 
         if yp not in ys_dict:
             y = len(ys)
@@ -314,7 +374,7 @@ class LSCVerbClasses:
         p_c = np.random.rand(self.n_cs)
         p_c /= np.sum(p_c)
 
-        p_vc = np.random.rand(self.dataset.n_vs, self.n_cs)
+        p_vc = np.random.rand(self.dataset.n_vps, self.n_cs)
         p_vc /= np.sum(p_vc, axis=0)
 
         p_nc = np.random.rand(self.dataset.n_ns, self.n_cs)
@@ -369,9 +429,9 @@ class LSCVerbClasses:
         # d = Sigma_y f(y)p(x|y)
         d = np.sum(f_ys * p_c_vn, axis=1)
 
-        for v in range(self.dataset.n_vs):
+        for v in range(self.dataset.n_vps):
             # Sigma_y in {v} X N f(y)p(x|y) / d
-            ys_per_v = self.dataset.ys_per_v[v]
+            ys_per_v = self.dataset.ys_per_vp[v]
             p_vc_1[v, :] = np.sum(f_ys[ys_per_v] * p_c_vn[:, ys_per_v], axis=1) / d
 
         for n in range(self.dataset.n_ns):
@@ -439,7 +499,7 @@ class EvaluationPseudoDisambiguation:
             if self.dataset.f_n[n] < self.lower_bound or self.dataset.f_n[n] > self.upper_bound:
                 continue
 
-            if self.dataset.f_v[v] < self.lower_bound or self.dataset.f_v[v] > self.upper_bound:
+            if self.dataset.f_vp[v] < self.lower_bound or self.dataset.f_vp[v] > self.upper_bound:
                 continue
 
             # select v' until one found that satisfies requirements
@@ -675,16 +735,16 @@ def main():
 
     # Parameter grid
     parameters = [
-        (5, 51),
-        (10, 51),
-        (20, 51),
+        # (5, 51),
+        # (10, 51),
+        # (20, 51),
         (30, 51),
-        (40, 51),
-        (50, 51),
-        (75, 51),
-        (100, 51),
-        (200, 51),
-        (300, 51)
+        # (40, 51),
+        # (50, 51),
+        # (75, 51),
+        # (100, 51),
+        # (200, 51),
+        # (300, 51)
     ]
 
     # Running the experiment for all parameters in the grid
@@ -694,12 +754,12 @@ def main():
         # Step one also evaluates in between runs
         step1 = LSCVerbClasses(dataset, n_cs=n_cs, em_iters=em_iters, name='all_pairs_lcs')
         step1.train()
-        print("------ Step 2 - Intransitive ------")
-        step2_1 = SubjectIntransitiveVerbClasses(dataset, step1, em_iters=em_iters, name='all_pairs_intransitive_class')
-        step2_1.train()
-        print("------ Step 2 - Transitive ------")
-        step2_2 = SubjectObjectTransitiveVerbClasses(dataset, step1, em_iters=em_iters, name='all_pairs_transitive_class')
-        step2_2.train()
+        # print("------ Step 2 - Intransitive ------")
+        # step2_1 = SubjectIntransitiveVerbClasses(dataset, step1, em_iters=em_iters, name='all_pairs_intransitive_class')
+        # step2_1.train()
+        # print("------ Step 2 - Transitive ------")
+        # step2_2 = SubjectObjectTransitiveVerbClasses(dataset, step1, em_iters=em_iters, name='all_pairs_transitive_class')
+        # step2_2.train()
 
 
 if __name__ == "__main__":
