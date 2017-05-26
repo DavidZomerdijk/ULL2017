@@ -18,6 +18,7 @@ The implementation was written by:
 Make sure the `data` directory contains the `all_pairs` file before running.
 """
 
+
 class Dataset:
     """
     This class contains all needed information from the dataset
@@ -106,9 +107,13 @@ class Dataset:
         self.ys_test_dict = dict()
         self.f_ys_test = list()  # frequencies
 
-        self.auxiliary_verb = set(['am', 'are', 'is', 'was', 'were', 'being', 'been', 'be', 'can', 'could', 'dare', 'do','does', 'did', 'have', 'has', 'had', 'having',
-                                   'may', 'might', 'must', 'need', 'ought', 'shall', 'should', 'will', 'would',
-                                   ])
+        self.auxiliary_verb = [
+            'am', 'are', 'is', 'was', 'were', 'being',
+            'been', 'be', 'can', 'could', 'dare', 'do',
+            'does', 'did', 'have', 'has', 'had', 'having',
+            'may', 'might', 'must', 'need', 'ought',
+            'shall', 'should', 'will', 'would',
+       ]
 
         if max_lines is None or max_lines > len(lines):
             n_lines = len(lines)
@@ -143,92 +148,97 @@ class Dataset:
         vt, nt = ln
         is_train = i < n_lines - self.n_test_pairs
 
-        verb = vt.split('_')[0]
+        vt_s = vt.split('_')
+        verb = '_'.join(vt_s[-2:])
+
+
         if verb not in self.auxiliary_verb:
-            # -------------------------
-            # Datastructures for step 1
-            # -------------------------
+            return None
 
-            if nt not in self.ns_dict:
-                n = len(self.ns)
-                self.ns.append(nt)
-                self.ns_dict[nt] = n
-                self.f_n.append(1 if is_train else 0)
-            else:
-                n = self.ns_dict[nt]
-                if is_train: self.f_n[n] += 1
+        # -------------------------
+        # Datastructures for step 1
+        # -------------------------
 
-            if vt not in self.vs_dict:
-                v = len(self.vs)
-                self.vs.append(vt)
-                self.vs_dict[vt] = v
-                self.f_v.append(1 if is_train else 0)
-            else:
-                v = self.vs_dict[vt]
-                if is_train: self.f_v[v] += 1
+        if nt not in self.ns_dict:
+            n = len(self.ns)
+            self.ns.append(nt)
+            self.ns_dict[nt] = n
+            self.f_n.append(1 if is_train else 0)
+        else:
+            n = self.ns_dict[nt]
+            if is_train: self.f_n[n] += 1
 
-            if is_train:
-                y = self.process_pair(n, v, self.ys, self.ys_dict, self.f_ys)
+        if vt not in self.vs_dict:
+            v = len(self.vs)
+            self.vs.append(vt)
+            self.vs_dict[vt] = v
+            self.f_v.append(1 if is_train else 0)
+        else:
+            v = self.vs_dict[vt]
+            if is_train: self.f_v[v] += 1
 
-                if y not in self.ys_per_v[v]:
-                    self.ys_per_v[v].append(y)
-                if y not in self.ys_per_n[n]:
-                    self.ys_per_n[n].append(y)
-            else:
-                self.process_pair(n, v, self.ys_test, self.ys_test_dict, self.f_ys_test)
+        if is_train:
+            y = self.process_pair(n, v, self.ys, self.ys_dict, self.f_ys)
 
-            # -------------------------
-            # Datastructures for step 2
-            # -------------------------
+            if y not in self.ys_per_v[v]:
+                self.ys_per_v[v].append(y)
+            if y not in self.ys_per_n[n]:
+                self.ys_per_n[n].append(y)
+        else:
+            self.process_pair(n, v, self.ys_test, self.ys_test_dict, self.f_ys_test)
 
-            if is_train:
+        # -------------------------
+        # Datastructures for step 2
+        # -------------------------
 
-                n_tr_obj = None
-                n_tr_subj = prev_n_tr_subj
+        if is_train:
 
-                # Subject of an intransitive verb
-                if vt.endswith('s_nsubj'):
-                    if nt not in self.ns_in_subj_dict:
-                        n_in_subj = n
-                        self.ns_in_subj_dict[nt] = (n_in_subj, len(self.ns_in_subj))
-                        self.ns_in_subj.append(n_in_subj)
-                        self.f_in_subj.append(1)
-                    else:
-                        n_in_subj, n_in_subj_i = self.ns_in_subj_dict[nt]
-                        self.f_in_subj[n_in_subj_i] += 1
+            n_tr_obj = None
+            n_tr_subj = prev_n_tr_subj
 
-                # Subject of an transitive verb
-                elif vt.endswith('so_nsubj'):
-                    if nt not in self.ns_tr_subj_dict:
-                        n_tr_subj = n
-                        self.ns_tr_subj_dict[nt] = n_tr_subj
-                        self.ns_tr_subj.append(n_tr_subj)
-                    else:
-                        n_tr_subj = self.ns_tr_subj_dict[nt]
+            # Subject of an intransitive verb
+            if vt.endswith('s_nsubj'):
+                if nt not in self.ns_in_subj_dict:
+                    n_in_subj = n
+                    self.ns_in_subj_dict[nt] = (n_in_subj, len(self.ns_in_subj))
+                    self.ns_in_subj.append(n_in_subj)
+                    self.f_in_subj.append(1)
+                else:
+                    n_in_subj, n_in_subj_i = self.ns_in_subj_dict[nt]
+                    self.f_in_subj[n_in_subj_i] += 1
 
-                # Object of an transitive verb
-                elif vt.endswith('so_dobj'):
-                    if nt not in self.ns_tr_obj_dict:
-                        n_tr_obj = n
-                        self.ns_tr_obj_dict[nt] = n_tr_obj
-                        self.ns_tr_obj.append(n_tr_obj)
-                    else:
-                        n_tr_obj = self.ns_tr_obj_dict[nt]
+            # Subject of an transitive verb
+            elif vt.endswith('so_nsubj'):
+                if nt not in self.ns_tr_subj_dict:
+                    n_tr_subj = n
+                    self.ns_tr_subj_dict[nt] = n_tr_subj
+                    self.ns_tr_subj.append(n_tr_subj)
+                else:
+                    n_tr_subj = self.ns_tr_subj_dict[nt]
 
-                if n_tr_obj is not None and n_tr_subj is not None:
+            # Object of an transitive verb
+            elif vt.endswith('so_dobj'):
+                if nt not in self.ns_tr_obj_dict:
+                    n_tr_obj = n
+                    self.ns_tr_obj_dict[nt] = n_tr_obj
+                    self.ns_tr_obj.append(n_tr_obj)
+                else:
+                    n_tr_obj = self.ns_tr_obj_dict[nt]
 
-                    wp = (n_tr_subj, n_tr_obj)
+            if n_tr_obj is not None and n_tr_subj is not None:
 
-                    if wp not in self.ws_dict:
-                        w = len(self.ws)
-                        self.ws.append(wp)
-                        self.f_ws.append(1)
-                        self.ws_dict[wp] = w
-                    else:
-                        w = self.ws_dict[wp]
-                        self.f_ws[w] += 1
+                wp = (n_tr_subj, n_tr_obj)
 
-                return n_tr_subj
+                if wp not in self.ws_dict:
+                    w = len(self.ws)
+                    self.ws.append(wp)
+                    self.f_ws.append(1)
+                    self.ws_dict[wp] = w
+                else:
+                    w = self.ws_dict[wp]
+                    self.f_ws[w] += 1
+
+            return n_tr_subj
 
     def process_pair(self, n, v, ys, ys_dict, f_ys):
 
@@ -652,6 +662,7 @@ class SubjectObjectTransitiveVerbClasses:
         )
 
         pickle.dump(self, open(out_path, 'wb'))
+
 
 def main():
     """Program entry point"""
