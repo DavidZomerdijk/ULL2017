@@ -9,7 +9,7 @@ import time
 
 import numpy as np
 
-from src.VAE import VAE
+from VAE import VAE
 
 np.random.seed(42)
 

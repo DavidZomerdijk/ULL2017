@@ -79,6 +79,7 @@ class Dataset:
         self.n_test_pairs = n_test_pairs
 
         # Token-index lookup
+        self.train_VAE = list()
         self.vps = list()
         self.vps_dict = dict()
         self.f_vp = list()
@@ -246,6 +247,10 @@ class Dataset:
                 self.ys_per_n[n].append(y)
         else:
             self.process_pair(n, vp, self.ys_test, self.ys_test_dict, self.f_ys_test)
+
+        self.train_VAE.append( (self.vs_dict[vt], self.vps_dict[vpt], self.ns_dict[nt]))
+
+
 
         # -------------------------
         # Datastructures for step 2
