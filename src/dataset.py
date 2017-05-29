@@ -69,29 +69,29 @@ class Dataset:
         self.n_test_pairs = n_test_pairs
 
         # Token-index lookup
-        self.vps = list()
+        self.vps = list()  # Lookup for unique verb-pos combination
         self.vps_dict = dict()
         self.f_vp = list()
 
-        self.vs = list()
+        self.vs = list()  # Lookup for unique verb
         self.vs_dict = dict()
         self.f_v = list()
 
-        self.ps = list()
+        self.ps = list()  # Lookup for unique pos-tag of verb
         self.ps_dict = dict()
         self.f_p = list()
 
-        self.ns = list()
+        self.ns = list()  # Lookup for unique noun
         self.ns_dict = dict()
         self.f_n = list()
 
-        self.ns_in_subj = list()
+        self.ns_in_subj = list()  # Lookup for unique noun as subject for intransitive verb
         self.ns_in_subj_dict = dict()
         self.f_in_subj = list()
 
-        self.ns_tr_subj = list()
+        self.ns_tr_subj = list()  # Lookup for unique noun as subject for transitive verb
         self.ns_tr_subj_dict = dict()
-        self.ns_tr_obj = list()
+        self.ns_tr_obj = list()  # Lookup for unique noun as object for transitive verb
         self.ns_tr_obj_dict = dict()
 
         self.ys = list()  # vp,n,v,p pairs
@@ -153,11 +153,11 @@ class Dataset:
         print("\rDataset read")
 
         emb = self.read_embeddings(embedding_file_path)
-        self.vs_emb = dict()
-        self.ns_emb = dict()
+        self.vs_emb = dict()  # Embeddings for stemmed unique verbs
+        self.ns_emb = dict()  # Embeddings for unique nouns
 
         for vt, ust_vts in self.vs_per_stem.items():
-            # we find a weighted embedding for a stem using a weighted mean for all occurrences
+            # We find a weighted embedding for a stem using a weighted mean for all occurrences
             e = [emb[ust_vt] for ust_vt in ust_vts if ust_vt in emb]
 
             if len(e) > 0:
