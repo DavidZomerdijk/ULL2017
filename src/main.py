@@ -52,6 +52,8 @@ class Dataset:
         print("\tUnique transitive subjects:\t\t%d" % len(dataset.ns_tr_subj))
         print("\tUnique transitive objects:\t\t%d" % len(dataset.ns_tr_obj))
         print("\tUnique subject-object pairs:\t%d" % len(dataset.ws))
+        print("\tEmbeddings for verbs:\t%d" % len(dataset.vs_emb))
+        print("\tEmbeddings for nouns:\t%d" % len(dataset.ns_emb))
 
         return dataset
 
@@ -69,7 +71,7 @@ class Dataset:
 
         return file_path + '.pkl'
 
-    def __init__(self, file_path, max_lines=None, n_test_pairs=0):
+    def __init__(self, file_path, max_lines=None, n_test_pairs=0, embedding_file_path='../data/glove.840B.300d.txt'):
         """
         Initialize a Dataset and read it in
         """
@@ -119,6 +121,9 @@ class Dataset:
         self.ys_test_dict = dict()
         self.f_ys_test = list()  # frequencies
 
+        self.vs_per_stem = defaultdict(list)
+        self.unstemmed_vs = dict()
+
         # We will filter these auxiliary verbs
         self.aux_vts = [
             'am', 'are', 'is', 'was', 'were', 'being',
@@ -159,6 +164,22 @@ class Dataset:
 
         print("\rDataset read")
 
+        emb = self.read_embeddings(embedding_file_path)
+        self.vs_emb = dict()
+        self.ns_emb = dict()
+
+        for vt, ust_vts in self.vs_per_stem.items():
+            # we find a weighted embedding for a stem using a weighted mean for all occurrences
+            e = [emb[ust_vt] for ust_vt in ust_vts if ust_vt in emb]
+
+            if len(e) > 0:
+                v = self.vs_dict[vt]
+                self.vs_emb[v] = np.mean(e, axis=1)
+
+        for n, nt in enumerate(self.ns):
+            if nt in emb:
+                self.ns_emb[n] = emb[nt]
+
         self.store(file_path, max_lines)
 
     def preprocess_line(self, ln, lowercase=True, stem_verbs=True, lump_digits=True, sep='_'):
@@ -174,10 +195,18 @@ class Dataset:
             vt = vt.lower()
 
         # We stem "earning" to "earn"
+        # Save unstemmed versions for later embedding based evaluation
         if stem_verbs and self.stemmer is not None:
-            vt = self.stemmer.stem(vt)
+            unstemmed_vt = vt
+            stemmed_vt = self.stemmer.stem(unstemmed_vt)
+            vt = stemmed_vt
 
-        vpt = vt + '_' + pt
+            if unstemmed_vt not in self.aux_vts and stemmed_vt not in self.aux_vts:
+                self.unstemmed_vs[unstemmed_vt] = stemmed_vt
+                self.vs_per_stem[stemmed_vt].append(unstemmed_vt)
+
+
+        vpt = (vt, pt)
 
         if lowercase:
             nt = nt.lower()
@@ -327,6 +356,29 @@ class Dataset:
         """
         with open(file_path, 'r') as f:
             return [tuple(ln.strip().split()) for ln in f]
+
+    def read_embeddings(self, embedding_file_path, vector_length=300):
+        """
+        Load the pretrained vectors
+        """
+        embeddings = dict()
+
+        with open(embedding_file_path, 'r') as f:
+            for i, ln in enumerate(f):
+
+                if i % 1000 == 0:
+                    stdout.write("\rReading embeddings… %d\tfrom %s" % (i, embedding_file_path))
+
+                ln = ln.split()
+                if len(ln) == vector_length + 1:
+                    token = ln[0]
+                    if token in self.unstemmed_vs or token in self.ns:
+                        embedding = np.array([float(x) for x in ln[1:]])
+                        embeddings[token] = embedding
+
+        print("\rEmbeddings read from %s" % (embedding_file_path,))
+
+        return embeddings
 
 
 class LSCVerbClasses:
@@ -731,20 +783,20 @@ def main():
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
 
-    dataset = Dataset.load(all_pairs, n_test_pairs=3000)
+    dataset = Dataset.load(gold_corpus, n_test_pairs=10)
 
     # Parameter grid
     parameters = [
-        # (5, 51),
-        # (10, 51),
-        # (20, 51),
-        (30, 51),
-        # (40, 51),
-        # (50, 51),
-        # (75, 51),
-        # (100, 51),
-        # (200, 51),
-        # (300, 51)
+        (5, 151),
+        (10, 151),
+        (20, 151),
+        (30, 151),
+        (40, 151),
+        (50, 151),
+        (75, 151),
+        (100, 151),
+        (200, 151),
+        (300, 151)
     ]
 
     # Running the experiment for all parameters in the grid
@@ -754,9 +806,9 @@ def main():
         # Step one also evaluates in between runs
         step1 = LSCVerbClasses(dataset, n_cs=n_cs, em_iters=em_iters, name='all_pairs_lcs')
         step1.train()
-        # print("------ Step 2 - Intransitive ------")
-        # step2_1 = SubjectIntransitiveVerbClasses(dataset, step1, em_iters=em_iters, name='all_pairs_intransitive_class')
-        # step2_1.train()
+        print("------ Step 2 - Intransitive ------")
+        step2_1 = SubjectIntransitiveVerbClasses(dataset, step1, em_iters=em_iters, name='all_pairs_intransitive_class')
+        step2_1.train()
         # print("------ Step 2 - Transitive ------")
         # step2_2 = SubjectObjectTransitiveVerbClasses(dataset, step1, em_iters=em_iters, name='all_pairs_transitive_class')
         # step2_2.train()
