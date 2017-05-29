@@ -94,7 +94,7 @@ class Dataset:
         self.ns_tr_obj = list()
         self.ns_tr_obj_dict = dict()
 
-        self.ys = list()  # v,n pairs
+        self.ys = list()  # vp,n,v,p pairs
         self.ys_dict = dict()
         self.f_ys = list()  # frequencies
 
@@ -105,7 +105,7 @@ class Dataset:
         self.ys_per_vp = defaultdict(list)
         self.ys_per_n = defaultdict(list)
 
-        self.ys_test = list()  # v,n pairs
+        self.ys_test = list()  # vp,n,v,p pairs
         self.ys_test_dict = dict()
         self.f_ys_test = list()  # frequencies
 
