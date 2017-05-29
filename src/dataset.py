@@ -70,44 +70,44 @@ class Dataset:
 
         # Token-index lookup
         self.vps = list()  # Lookup for unique verb-pos combination
-        self.vps_dict = dict()
-        self.f_vp = list()
+        self.vps_dict = dict()  # Reverse lookup
+        self.f_vp = list()  # Frequencies
 
         self.vs = list()  # Lookup for unique verb
-        self.vs_dict = dict()
-        self.f_v = list()
+        self.vs_dict = dict()  # Reverse lookup
+        self.f_v = list()  # Frequencies
 
         self.ps = list()  # Lookup for unique pos-tag of verb
-        self.ps_dict = dict()
-        self.f_p = list()
+        self.ps_dict = dict()  # Reverse lookup
+        self.f_p = list()  # Frequencies
 
         self.ns = list()  # Lookup for unique noun
-        self.ns_dict = dict()
-        self.f_n = list()
+        self.ns_dict = dict()  # Reverse lookup
+        self.f_n = list()  # Frequencies
 
         self.ns_in_subj = list()  # Lookup for unique noun as subject for intransitive verb
-        self.ns_in_subj_dict = dict()
-        self.f_in_subj = list()
+        self.ns_in_subj_dict = dict()  # Reverse lookup
+        self.f_in_subj = list()  # Frequencies
 
         self.ns_tr_subj = list()  # Lookup for unique noun as subject for transitive verb
-        self.ns_tr_subj_dict = dict()
+        self.ns_tr_subj_dict = dict()  # Reverse lookup
         self.ns_tr_obj = list()  # Lookup for unique noun as object for transitive verb
-        self.ns_tr_obj_dict = dict()
+        self.ns_tr_obj_dict = dict()  # Reverse lookup
 
         self.ys = list()  # vp,n,v,p pairs
-        self.ys_dict = dict()
-        self.f_ys = list()  # frequencies
+        self.ys_dict = dict()  # Reverse lookup
+        self.f_ys = list()  # Frequencies
 
         self.ws = list()  # n, n pairs
-        self.ws_dict = dict()
-        self.f_ws = list()
+        self.ws_dict = dict()  # Reverse lookup
+        self.f_ws = list()  # Frequencies
 
         self.ys_per_vp = defaultdict(list)
         self.ys_per_n = defaultdict(list)
 
         self.ys_test = list()  # vp,n,v,p pairs
-        self.ys_test_dict = dict()
-        self.f_ys_test = list()  # frequencies
+        self.ys_test_dict = dict()  # Reverse lookup
+        self.f_ys_test = list()  # Frequencies
 
         self.vs_per_stem = defaultdict(list)
         self.unstemmed_vs = dict()
