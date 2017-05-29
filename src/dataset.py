@@ -162,7 +162,7 @@ class Dataset:
 
             if len(e) > 0:
                 v = self.vs_dict[vt]
-                self.vs_emb[v] = np.mean(e, axis=1)
+                self.vs_emb[v] = np.mean(e, axis=0)
 
         for n, nt in enumerate(self.ns):
             if nt in emb:

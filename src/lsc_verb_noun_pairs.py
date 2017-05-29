@@ -4,6 +4,7 @@ from os import path
 import numpy as np
 import pickle
 from eval_pseudo_disambiguation import EvaluationPseudoDisambiguation
+from eval_embedding_centroid import EvaluationEmbeddingCentroids
 
 
 class LSCVerbClasses:
@@ -30,6 +31,11 @@ class LSCVerbClasses:
 
         self.p_vn = None  # Calculated each EM-Iteration
         self.p_c, self.p_vc, self.p_nc = self.initialize_parameters()
+
+        # Helpers for the dataset
+        self.ys_v = [v for (v, n, _, _) in dataset.ys]
+        self.ys_n = [n for (v, n, _, _) in dataset.ys]
+        self.f_ys = np.array(dataset.f_ys)
 
     def __getstate__(self):
         """Return state values to be pickled."""
@@ -64,30 +70,38 @@ class LSCVerbClasses:
         Train the algorithm
         """
 
-        ys_v = [v for (v, n) in self.dataset.ys]
-        ys_n = [n for (v, n) in self.dataset.ys]
-        f_ys = np.array(self.dataset.f_ys)
-
-        evaluator = EvaluationPseudoDisambiguation(self.dataset, self, lower_bound=30)
+        pseudo_disambiguation = EvaluationPseudoDisambiguation(self.dataset, self, lower_bound=30)
+        centroid_evaluator = EvaluationEmbeddingCentroids(self.dataset, self)
 
         for i in range(self.current_iter, self.em_iters):
             self.current_iter = i
 
-            likelihood = self.em_iter(ys_v, ys_n, f_ys)
+            likelihood = self.em_iter()
 
             self.likelihoods.append(likelihood)
 
-            if i % 5 == 0:
-                acc = evaluator.evaluate()
+            if i % 5 == 0 and i != 0:
+                acc = pseudo_disambiguation.evaluate()
                 self.accuracies[i] = acc
                 print('%i: Log-likelihood: %f\tAccuracy:\t%f' % (i, likelihood, acc))
+                centroid_evaluator.evaluate(file_name='%d-%d' % (self.n_cs, i))
             else:
                 print('%i: Log-likelihood: %f' % (i, likelihood))
 
             if i % 10 == 0:
                 self.store()
 
-    def em_iter(self, ys_v, ys_n, f_ys):
+    def p_c_vn(self):
+        """
+        P(c|v, n)
+        :return:
+        """
+        p_c_vn = (self.p_c * self.p_vc[self.ys_v, :] * self.p_nc[self.ys_n, :]).T
+        p_vn = np.sum(p_c_vn, axis=0)  # P(v, n)
+        p_c_vn /= p_vn  # P(c|v, n)
+        return p_c_vn, p_vn
+
+    def em_iter(self):
         """
         Do an EM step
         :return: log-likelihood
@@ -97,24 +111,22 @@ class LSCVerbClasses:
         p_vc_1 = np.array(self.p_vc)
         p_nc_1 = np.array(self.p_nc)
 
-        p_c_vn = (self.p_c * self.p_vc[ys_v, :] * self.p_nc[ys_n, :]).T
-        p_vn = np.sum(p_c_vn, axis=0)  # P(v, n)
-        p_c_vn /= p_vn  # P(c|v, n)
+        p_c_vn, p_vn = self.p_c_vn()
 
-        likelihood = np.sum(f_ys * np.log(p_vn))
+        likelihood = np.sum(self.f_ys * np.log(p_vn))
 
         # d = Sigma_y f(y)p(x|y)
-        d = np.sum(f_ys * p_c_vn, axis=1)
+        d = np.sum(self.f_ys * p_c_vn, axis=1)
 
         for v in range(self.dataset.n_vps):
             # Sigma_y in {v} X N f(y)p(x|y) / d
             ys_per_v = self.dataset.ys_per_vp[v]
-            p_vc_1[v, :] = np.sum(f_ys[ys_per_v] * p_c_vn[:, ys_per_v], axis=1) / d
+            p_vc_1[v, :] = np.sum(self.f_ys[ys_per_v] * p_c_vn[:, ys_per_v], axis=1) / d
 
         for n in range(self.dataset.n_ns):
             # Sigma_y in N X {v} f(y)p(x|y) / d
             ys_per_n = self.dataset.ys_per_n[n]
-            p_nc_1[n, :] = np.sum(f_ys[ys_per_n] * p_c_vn[:, ys_per_n], axis=1) / d
+            p_nc_1[n, :] = np.sum(self.f_ys[ys_per_n] * p_c_vn[:, ys_per_n], axis=1) / d
 
         # d / |Y|
         p_c_1 = d / self.dataset.n_ys

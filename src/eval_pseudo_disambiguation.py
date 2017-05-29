@@ -23,7 +23,7 @@ class EvaluationPseudoDisambiguation:
 
         random.seed(1)
 
-        for i, (v, n) in enumerate(self.dataset.ys_test):
+        for i, (v, n, _, _) in enumerate(self.dataset.ys_test):
 
             # don't consider if upper or lower bound limits are not satisfied
             if self.dataset.f_n[n] < self.lower_bound or self.dataset.f_n[n] > self.upper_bound:
