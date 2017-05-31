@@ -26,20 +26,23 @@ def main():
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
 
-    dataset = Dataset.load(all_pairs, n_test_pairs=3000)
+    dataset = Dataset.load(all_pairs, n_test_pairs=10000)
 
     # Parameter grid
     parameters = [
-        # (5, 151),
-        # (10, 151),
-        # (20, 151),
-        (30, 151),
-        (40, 151),
-        (50, 151),
-        (75, 151),
-        (100, 151),
-        (200, 151),
-        (300, 151)
+        (5, 101),
+        (10, 101),
+        (20, 101),
+        (30, 101),
+        (40, 101),
+        (50, 101),
+        (75, 101),
+        (100, 101),
+        (200, 101),
+        (300, 101),
+        (400, 101),
+        (500, 101),
+        (750, 101),
     ]
 
     # Running the experiment for all parameters in the grid
