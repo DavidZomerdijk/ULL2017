@@ -88,7 +88,7 @@ class LSCVerbClasses:
             else:
                 print('%i: Log-likelihood: %f' % (i, likelihood))
 
-            if i % 25 == 0:
+            if i % 25 == 0 and i != 0:
                 centroid_evaluator.evaluate(file_name='%d-%d' % (self.n_cs, i))
                 self.store()
 
@@ -130,7 +130,7 @@ class LSCVerbClasses:
             p_nc_1[n, :] = np.sum(self.f_ys[ys_per_n] * p_c_vn[:, ys_per_n], axis=1) / d
 
         # d / |Y|
-        p_c_1 = d / self.dataset.n_ys
+        p_c_1 = d / sum(self.dataset.f_ys)
 
         self.p_c = p_c_1
         self.p_vc = p_vc_1
