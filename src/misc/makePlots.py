@@ -3,14 +3,14 @@ import sys
 import math
 sys.path.append("..")
 from lsc_verb_noun_pairs import LSCVerbClasses
-import mai
+import main
 from lsc_subj_intransitive_verbs import SubjectIntransitiveVerbClasses
 import lsc_subj_obj_transitive_verbs
 import matplotlib.pyplot as plt
 
 
 path = "../../out/"
-img_path = "../../out/img"
+img_path = "../../out/img/"
 
 iterations = [x * 5 for x in range(31)] #[0,5,10,15,20,25,30,35,40,45,50,45,50]
 clusters = [5,10,20,30,40,50,75,100,200,300]
@@ -24,7 +24,7 @@ for cluster in clusters:
     likelihoods[cluster] = model.likelihoods
 
 #Accuracy per cluster
-n_of_iterations = i
+n_of_iterations = 150
 data =  [(cluster, accuracies[cluster][n_of_iterations])  for cluster in clusters]
 
 x_val = [x[0] for x in data]
@@ -36,7 +36,7 @@ plt.xlabel('number of classes')
 plt.ylabel('accuracy')
 plt.savefig(img_path + 'accuracy_clusters.pdf')
 
-#accuracy for several clusters
+#Likelihood progression
 data =  [(cluster, likelihoods[cluster][50])  for cluster in clusters]
 max_iter = 20
 x_val = range(0,max_iter)
@@ -57,8 +57,6 @@ plt.xlim([0, max_iter])
 plt.xlabel('number of iterations')
 plt.ylabel('- log likelihood')
 plt.savefig('likelihood_part1.pdf')
-
-
 
 
 #likelihood part 2
