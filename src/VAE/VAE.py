@@ -109,6 +109,7 @@ class VAE:
         # Reparametrize
         z = mu + T.exp(0.5 * log_sigma) * eps
 
+
         return z
 
     def decoder(self, x, z):
@@ -131,12 +132,14 @@ class VAE:
         x = T.matrix("x")
 
         epoch = T.scalar("epoch")
-
+        #TODO: shouldnt this be self.batch_size
         batch_size = x.shape[0]
 
         mu, log_sigma = self.encoder(x)
         z = self.sampler(mu, log_sigma)
         reconstructed_x, logpxz = self.decoder(x,z)
+
+        #logpxz
 
         # Expectation of (logpz - logqz_x) over logqz_x is equal to KLD (see appendix B):
         KLD = 0.5 * T.sum(1 + log_sigma - mu**2 - T.exp(log_sigma), axis=1)
