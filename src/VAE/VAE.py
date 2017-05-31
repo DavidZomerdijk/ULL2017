@@ -2,7 +2,8 @@
 This code is from https://github.com/y0ast/Variational-Autoencoder/blob/master/VAE.py
 """
 from __future__ import division
-
+import scipy.sparse as sp
+from theano import sparse
 import numpy as np
 import theano
 import theano.tensor as T
@@ -18,7 +19,10 @@ def relu(x):
 
 class VAE:
     """This class implements the Variational Auto Encoder"""
-    def __init__(self, continuous, hu_encoder, hu_decoder, n_latent, x_train, b1=0.95, b2=0.999, batch_size=100, learning_rate=0.001, lam=0, L=1):
+    def __init__(self, continuous, hu_encoder, hu_decoder, n_latent, x_train, len_vs, len_ps, len_ns, b1=0.95, b2=0.999, batch_size=100, learning_rate=0.001, lam=0, L=1):
+        self.len_vs = len_vs
+        self.len_ps = len_ps
+        self.len_ns = len_ns
         self.continuous = continuous
         self.hu_encoder = hu_encoder
         self.hu_decoder = hu_decoder
@@ -82,9 +86,10 @@ class VAE:
                 self.m[key] = theano.shared(np.zeros_like(value.get_value()).astype(theano.config.floatX), name='m_' + key)
                 self.v[key] = theano.shared(np.zeros_like(value.get_value()).astype(theano.config.floatX), name='v_' + key)
 
-        x_train = theano.shared(x_train.astype(theano.config.floatX), name="x_train")
+        # x_train = theano.shared(x_train.astype(theano.config.floatX), name="x_train")
+        # x_train = theano.shared(x_train, name="x_train")
 
-        self.update, self.likelihood, self.encode, self.decode = self.create_gradientfunctions(x_train)
+        self.update, self.likelihood, self.encode, self.decode = self.create_gradientfunctions()
 
 
 
@@ -115,29 +120,32 @@ class VAE:
     def decoder(self, x, z):
         h_decoder = relu(T.dot(z, self.params['W_zh']) + self.params['b_zh'].dimshuffle('x', 0))
 
-        if self.continuous:
-            reconstructed_x = T.dot(h_decoder, self.params['W_hxmu']) + self.params['b_hxmu'].dimshuffle('x', 0)
-            log_sigma_decoder = T.dot(h_decoder, self.params['W_hxsigma']) + self.params['b_hxsigma']
 
-            logpxz = (-(0.5 * np.log(2 * np.pi) + 0.5 * log_sigma_decoder) -
-                      0.5 * ((x - reconstructed_x)**2 / T.exp(log_sigma_decoder))).sum(axis=2).mean(axis=0)
-        else:
-            reconstructed_x = T.nnet.sigmoid(T.dot(h_decoder, self.params['W_hx']) + self.params['b_hx'].dimshuffle('x', 0))
-            logpxz = - T.nnet.binary_crossentropy(reconstructed_x, x).sum(axis=2).mean(axis=0)
+        reconstructed_x = T.nnet.sigmoid(T.dot(h_decoder, self.params['W_hx']) + self.params['b_hx'].dimshuffle('x', 0))
+
+        a = reconstructed_x[:10]
+        b = x[:10]
+        rangePs = self.len_vs + self.len_ps
+        rangeNs = rangePs + self.len_ns
+        logpxz = T.nnet.binary_crossentropy(a, b).sum(axis=2).mean(axis=0)
+            # - T.nnet.binary_crossentropy(reconstructed_x[:,:self.len_vs], x[:,:self.len_vs]).sum(axis=2).mean(axis=0)
+                 # - T.nnet.binary_crossentropy(reconstructed_x[:,self.len_vs: rangePs], x[:,self.len_vs : rangePs]).sum(axis=2).mean(axis=0) \
+                 # - T.nnet.binary_crossentropy(reconstructed_x[:, rangePs: rangeNs], x[:, rangePs: rangeNs]).sum(axis=2).mean(axis=0)
 
         return reconstructed_x, logpxz
 
 
-    def create_gradientfunctions(self, x_train):
+    def create_gradientfunctions(self):
+
         x = T.matrix("x")
 
         epoch = T.scalar("epoch")
         #TODO: shouldnt this be self.batch_size
-        batch_size = x.shape[0]
+        # batch_size = x.shape[0]
 
         mu, log_sigma = self.encoder(x)
         z = self.sampler(mu, log_sigma)
-        reconstructed_x, logpxz = self.decoder(x,z)
+        reconstructed_x, logpxz = self.decoder(x1,x,z)
 
         #logpxz
 
@@ -153,26 +161,28 @@ class VAE:
         # Adam implemented as updates
         updates = self.get_adam_updates(gradients, epoch)
 
-        batch = T.iscalar('batch')
 
-        givens = {
-            x: x_train[batch*self.batch_size:(batch+1)*self.batch_size, :]
-        }
+
 
         # Define a bunch of functions for convenience
-        update = theano.function([batch, epoch], logpx, updates=updates, givens=givens)
+        update = theano.function([x , epoch], logpx, updates=updates)
         likelihood = theano.function([x], logpx)
         encode = theano.function([x], z)
         decode = theano.function([z], reconstructed_x)
 
         return update, likelihood, encode, decode
 
+    def embed(self, x):
+        return x.toarray()
+
     def transform_data(self, x_train):
         transformed_x = np.zeros((self.N, self.n_latent))
         batches = np.arange(int(self.N / self.batch_size))
 
         for batch in batches:
+            #TODO: check if it works
             batch_x = x_train[batch*self.batch_size:(batch+1)*self.batch_size, :]
+            print(batch_x)
             transformed_x[batch*self.batch_size:(batch+1)*self.batch_size, :] = self.encode(batch_x)
 
         return transformed_x

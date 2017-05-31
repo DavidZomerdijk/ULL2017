@@ -10,6 +10,8 @@ import time
 import os
 from sklearn.cluster import KMeans
 from collections import defaultdict
+import scipy.sparse as sp
+from theano import sparse
 
 
 np.random.seed(42)
@@ -24,7 +26,7 @@ gold_corpus = path.join(data_path, 'gold_deps.txt')
 all_pairs = path.join(data_path, 'all_pairs')
 path = "./"
 
-def train_VAE():
+def train_VAE(x_train):
     batch_order = np.arange(int(model.N / model.batch_size))
 
     epoch = 0
@@ -38,6 +40,7 @@ def train_VAE():
 
     if __name__ == "__main__":
         print("iterating")
+        batch_size = 100
         while epoch < n_epochs:
             epoch += 1
             start = time.time()
@@ -45,7 +48,7 @@ def train_VAE():
             LB = 0.
 
             for batch in batch_order:
-                batch_LB = model.update(batch, epoch)
+                batch_LB = model.update( x_train[batch*batch_size:(batch+1)*batch_size].toarray() , epoch)
                 LB += batch_LB
 
             LB /= len(batch_order)
@@ -55,25 +58,29 @@ def train_VAE():
             np.save(path + "LB_list.npy", LB_list)
             model.save_parameters(path)
 
-def create_train_matrix(dataset):
-    row = np.array([0, 0, 1, 2, 2, 2])
-    col = np.array([0, 2, 2, 0, 1, 2])
-    data = np.array([1, 2, 3, 4, 5, 6])
-    mtx = sparse.csc_matrix((data, (row, col)), shape=(3, 3))
 
-    # x_train = []
-    # for i in dataset.train_VAE:
-    #     verb_temp = np.zeros(len(dataset.vs))
-    #     verb_temp.itemset(i[0],int(1))
-    #
-    #     verb_suf_temp = np.zeros(len(dataset.vps))
-    #     verb_suf_temp.itemset(i[1],int(1))
-    #
-    #     noun_temp = np.zeros(len(dataset.ns))
-    #     noun_temp.itemset(i[2],int(1))
-    #
-    #     x_train.append( np.concatenate((verb_temp, verb_suf_temp, noun_temp)))
-    # return np.array(x_train)
+def create_train_matrix(dataset):
+    shape_x_train = (len(dataset.ys), (len(dataset.vs) + len(dataset.ps) + len(dataset.ns)))
+    start_ps = len(dataset.vs)
+    start_ns = start_ps + len(dataset.ps)
+
+    row = []
+    col = []
+    data = []
+    for i, x in enumerate(dataset.ys):
+        col.append(x[2])
+        col.append(start_ps + x[3])
+        col.append(start_ns + x[1])  # add noun
+        # initialize other matrices
+        row.append(i)
+        row.append(i)
+        row.append(i)
+        data.append(1)
+        data.append(1)
+        data.append(1)
+
+    mtx = sp.csc_matrix((data, (row, col)), shape=shape_x_train)
+    return mtx
 
 def cluster_hidden_vectors(hidden_vectors, dataset):
     kmeans = KMeans(n_clusters = 30, random_state=0 ).fit(hidden_vectors)
@@ -95,28 +102,30 @@ def cluster_hidden_vectors(hidden_vectors, dataset):
 if __name__ == "__main__":
 
 
-    dataset = Dataset.load(all_pairs, n_test_pairs=3000)
+    dataset = Dataset.load(gold_corpus, n_test_pairs=3000)
     print("dataset created")
-    X_VAE = create_train_matrix(dataset)
 
+    print("create train matrix")
+    x_vae = create_train_matrix(dataset)
     print("instantiating model")
 
-    model = VAE(continuous, hu_encoder, hu_decoder, n_latent, X_VAE)
+    model = VAE(continuous, hu_encoder, hu_decoder, n_latent, x_vae, len(dataset.vs), len(dataset.ps), len(dataset.ns))
 
-    trainModel = False
+
+    trainModel = True
     if(trainModel):
-        train_VAE()
+        train_VAE(x_vae)
     else:
         model.load_parameters(path)
 
 
     # Determine Hidden factors
-    z =  model.encode(X_VAE)
+    # z =  model.encode(x_vae)
 
     # y = model.decode(z)
-
-    clusters2 = cluster_hidden_vectors(z[0], dataset)
-    pickle.dump(clusters2 , open( "clusters.pkl", "wb" ))
+    #
+    # clusters2 = cluster_hidden_vectors(z[0], dataset)
+    # pickle.dump(clusters2 , open( "clusters.pkl", "wb" ))
 
 
     # verb_range = [0,len(dataset.vs)-1]
