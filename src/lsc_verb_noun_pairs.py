@@ -84,11 +84,12 @@ class LSCVerbClasses:
                 acc = pseudo_disambiguation.evaluate()
                 self.accuracies[i] = acc
                 print('%i: Log-likelihood: %f\tAccuracy:\t%f' % (i, likelihood, acc))
-                centroid_evaluator.evaluate(file_name='%d-%d' % (self.n_cs, i))
+
             else:
                 print('%i: Log-likelihood: %f' % (i, likelihood))
 
-            if i % 10 == 0:
+            if i % 25 == 0:
+                centroid_evaluator.evaluate(file_name='%d-%d' % (self.n_cs, i))
                 self.store()
 
     def p_c_vn(self):

@@ -11,17 +11,17 @@ data_path = os.path.join(os.path.dirname(__file__), '..', 'data')
 gold_corpus = os.path.join(data_path, 'gold_deps.txt')
 all_pairs = os.path.join(data_path, 'all_pairs')
 
-dataset = Dataset.load(all_pairs, n_test_pairs=3000)
+dataset = Dataset.load(all_pairs, n_test_pairs=10000)
 
 v_dim = dataset.n_vs
 n_dim = dataset.n_ns
 p_dim = dataset.n_ps
 
 input_dim = v_dim + n_dim + p_dim
-hidden_encoder_dim = 400
-hidden_decoder_dim = 400
-latent_dim = 20
-lam = 0
+hidden_encoder_dim = 600
+hidden_decoder_dim = 600
+latent_dim = 30
+lam = 0.01
 
 def weight_variable(shape):
   initial = tf.truncated_normal(shape, stddev=0.001)
@@ -107,7 +107,7 @@ summary_op = tf.summary.merge_all()
 # add Saver ops
 saver = tf.train.Saver()
 
-n_epochs = 5
+n_epochs = 10
 batch_size = 100
 
 ys = dataset.ys
@@ -118,11 +118,11 @@ def chunks(l, n):
         yield l[i:i + n]
 
 with tf.Session() as sess:
-  summary_writer = tf.summary.FileWriter('experiment',
+  summary_writer = tf.summary.FileWriter('../out/tf/experiment',
                                           graph=sess.graph)
-  if os.path.isfile("save/model.ckpt"):
+  if os.path.isfile("../out/model-2.ckpt"):
     print("Restoring saved parameters")
-    saver.restore(sess, "save/model.ckpt")
+    saver.restore(sess, "../out/model-2.ckpt")
   else:
     print("Initializing parameters")
     sess.run(tf.global_variables_initializer())
@@ -141,8 +141,9 @@ with tf.Session() as sess:
       _, cur_loss, summary_str = sess.run([train_step, loss, summary_op], feed_dict=feed_dict)
       summary_writer.add_summary(summary_str, step)
 
-      if step % 50 == 0:
-        save_path = saver.save(sess, "../out/model.ckpt")
+      if step % 500 == 0:
+        save_path = saver.save(sess, "../out/model-2.ckpt")
 
-      print("Step {0} | Loss: {1}".format(step, cur_loss))
+      if step % 50 == 0:
+        print("Step {0} | Epoch {1} | Loss: {2}".format(step, epoch, cur_loss))
 

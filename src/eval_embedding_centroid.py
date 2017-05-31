@@ -13,7 +13,7 @@ class EvaluationEmbeddingCentroids:
     Evaluation using embeddings and cluster centroids in embedding space
     """
 
-    def __init__(self, dataset, model):
+    def __init__(self, dataset, model, background_n=100):
         self.dataset = dataset
         self.model = model
 
@@ -21,14 +21,14 @@ class EvaluationEmbeddingCentroids:
         self.cn_emb = np.zeros((self.model.n_cs, 300))
         self.cy_emb = np.zeros((self.model.n_cs, 600))
 
-        self.vs_emb = [emb for i, (v, emb) in enumerate(self.dataset.vs_emb.items()) if i < 250]
-        self.ns_emb = [emb for i, (n, emb) in enumerate(self.dataset.ns_emb.items()) if i < 250]
+        self.vs_emb = [emb for i, (v, emb) in enumerate(self.dataset.vs_emb.items()) if i < background_n]
+        self.ns_emb = [emb for i, (n, emb) in enumerate(self.dataset.ns_emb.items()) if i < background_n]
         self.ys_emb = list()
 
         random.seed(1)
-        for (vp, n, v, _) in random.sample(self.dataset.ys, 500):
+        for (vp, n, v, _) in random.sample(self.dataset.ys, int(background_n * 1.25)):
 
-            if len(self.ys_emb) >= 250:
+            if len(self.ys_emb) >= background_n:
                 break
 
             if n in self.dataset.ns_emb and v in self.dataset.vs_emb:
@@ -47,8 +47,8 @@ class EvaluationEmbeddingCentroids:
         self.find_noun_cluster_embeddings()
         self.tsne(self.cn_emb, self.ns_emb, file_name='%s-noun' % file_name, color='b')
 
-        self.find_cluster_embeddings()
-        self.tsne(self.cy_emb, self.ys_emb, file_name='%s-pairs' % file_name, color='g')
+        # self.find_cluster_embeddings()
+        # self.tsne(self.cy_emb, self.ys_emb, file_name='%s-pairs' % file_name, color='g')
 
     def find_verb_cluster_embeddings(self):
 
