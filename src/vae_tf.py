@@ -92,9 +92,9 @@ v_sce = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=v_lo
 n_sce = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=n_logits, labels=N))
 p_sce = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=p_logits, labels=P))
 
-V_prediction = tf.argmax(tf.nn.softmax(logits=v_logits), axis=1)
-N_prediction = tf.argmax(tf.nn.softmax(logits=n_logits), axis=1)
-P_prediction = tf.argmax(tf.nn.softmax(logits=p_logits), axis=1)
+V_prediction = tf.to_int32(tf.argmax(tf.nn.softmax(logits=v_logits), axis=1))
+N_prediction = tf.to_int32(tf.argmax(tf.nn.softmax(logits=n_logits), axis=1))
+P_prediction = tf.to_int32(tf.argmax(tf.nn.softmax(logits=p_logits), axis=1))
 
 V_accuracy = tf.contrib.metrics.accuracy(V_prediction, V)
 N_accuracy = tf.contrib.metrics.accuracy(N_prediction, N)
