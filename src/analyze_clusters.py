@@ -3,15 +3,18 @@ from __future__ import print_function
 import os.path
 import random
 from dataset import Dataset
-
+import numpy as np
+from collections import defaultdict
 import tensorflow as tf
+import pickle
 from tensorflow.examples.tutorials.mnist import input_data
 
 data_path = os.path.join(os.path.dirname(__file__), '..', 'data')
 gold_corpus = os.path.join(data_path, 'gold_deps.txt')
 all_pairs = os.path.join(data_path, 'all_pairs')
 
-dataset = Dataset.load(all_pairs, n_test_pairs=10000)
+#Todo: get the most recent dataset
+dataset = Dataset.load(all_pairs, n_test_pairs=3000)
 
 v_dim = dataset.n_vs
 n_dim = dataset.n_ns
@@ -24,12 +27,12 @@ latent_dim = 30
 lam = 0.01
 
 def weight_variable(shape):
-  initial = tf.truncated_normal(shape, stddev=0.001)
-  return tf.Variable(initial)
+    initial = tf.truncated_normal(shape, stddev=0.001)
+    return tf.Variable(initial)
 
 def bias_variable(shape):
-  initial = tf.constant(0., shape=shape)
-  return tf.Variable(initial)
+    initial = tf.constant(0., shape=shape)
+    return tf.Variable(initial)
 
 V = tf.placeholder("int32", shape=[None])
 N = tf.placeholder("int32", shape=[None])
@@ -92,14 +95,6 @@ v_sce = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=v_lo
 n_sce = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=n_logits, labels=N))
 p_sce = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=p_logits, labels=P))
 
-V_prediction = tf.to_int32(tf.argmax(tf.nn.softmax(logits=v_logits), axis=1))
-N_prediction = tf.to_int32(tf.argmax(tf.nn.softmax(logits=n_logits), axis=1))
-P_prediction = tf.to_int32(tf.argmax(tf.nn.softmax(logits=p_logits), axis=1))
-
-V_accuracy = tf.contrib.metrics.accuracy(V_prediction, V)
-N_accuracy = tf.contrib.metrics.accuracy(N_prediction, N)
-P_accuracy = tf.contrib.metrics.accuracy(P_prediction, P)
-
 BCE = v_sce + n_sce + p_sce
 
 loss = tf.reduce_mean(BCE + KLD)
@@ -115,59 +110,107 @@ summary_op = tf.summary.merge_all()
 # add Saver ops
 saver = tf.train.Saver()
 
-n_epochs = 10
+n_epochs = 1
 batch_size = 100
 
-ys_train = dataset.ys
-ys_test = dataset.ys_test
-
+ys = dataset.ys
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
-with tf.Session() as sess:
-  summary_writer = tf.summary.FileWriter('../out/tf/experiment',
-                                          graph=sess.graph)
-  if os.path.isfile("../out/model-2.ckpt"):
-    print("Restoring saved parameters")
-    saver.restore(sess, "../out/model-2.ckpt")
-  else:
-    print("Initializing parameters")
-    sess.run(tf.global_variables_initializer())
+def get_latent_vectors():
+    with tf.Session() as sess:
+        summary_writer = tf.summary.FileWriter('../out/tf/experiment',
+                                              graph=sess.graph)
+        if os.path.isfile("../out/model-2.ckpt"):
+            print("Restoring saved parameters")
+            saver.restore(sess, "../out/model-2.ckpt")
+        else:
+            print("Initializing parameters")
+            sess.run(tf.global_variables_initializer())
 
-  _, ns_test, vs_test, ps_test = [list(t) for t in zip(*ys_test)]
-  feed_dict_test = {V: vs_test, N: ns_test, P: ps_test}
+        step = 0
 
-  step = 0
-  for epoch in range(1, n_epochs):
 
-    random.shuffle(ys_train)
+        total_output = []
+        print(len(list(chunks(ys, batch_size))))
+        for batch in list(chunks(ys, batch_size)):
+            _, ns, vs, ps = [list(t) for t in zip(*batch)]
+            step += 1
+            feed_dict = {V: vs, N: ns, P: ps}
+            output = sess.run(z, feed_dict=feed_dict)
+            total_output.append(output)
+            print(step)
 
-    for batch in list(chunks(ys_train, batch_size)):
-      _, ns, vs, ps = [list(t) for t in zip(*batch)]
-
-      step += 1
-
-      feed_dict = {V: vs, N: ns, P: ps}
-
-      if step % 50 == 0:
-        _, cur_loss, summary_str = sess.run([train_step, loss, summary_op], feed_dict=feed_dict)
-        summary_writer.add_summary(summary_str, step)
-        print("Step {0} | Epoch {1} | Loss: {2}".format(step, epoch, cur_loss))
-      else:
-        sess.run([train_step], feed_dict=feed_dict)
-
-      feed_dict = {V: vs, N: ns, P: ps}
-
-      if step % 1000 == 0:
-        test_loss, v_acc, n_acc, p_acc = sess.run([loss, V_accuracy, N_accuracy, P_accuracy], feed_dict=feed_dict)
-        print("Step {0} | Epoch {1} | Test-Loss: {2} | Verb Accuracy: {3} | Noun Accuracy: {4} | POS Accuracy: {5}".format(step, epoch, test_loss, v_acc, n_acc, p_acc))
-      else:
-        sess.run([train_step], feed_dict=feed_dict)
-
-      if step % 10000 == 0:
-        save_path = saver.save(sess, "../out/model-2.ckpt")
+        latent_vectors = np.vstack(total_output)
+        pickle.dump(latent_vectors, open("../out/latent_vectors.p", "wb"))
+        return latent_vectors
 
 
 
+def softmax(x):
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum()
+def normalize(x):
+    x = np.array(x)
+    return x / x.max(axis=0)
+
+def determine_ys_cluster(l_vectors, ys):
+    ys_clusters = defaultdict(lambda: defaultdict(int))
+    for  i,(vp,n,v,p) in enumerate(ys):
+        ys_clusters[int(l_vectors[i].argmax(axis=0))][v] += 1
+
+
+    return ys_clusters
+
+
+def create_final_clusters(clusters, dataset, use_softmax = False):
+    # Now determine which class occurs most often
+    final_clusters = defaultdict(list)
+
+    for verb in dataset.vs:
+        counts = []
+
+        for c in range(len(clusters)):
+
+            if dataset.vs_dict[verb] in clusters[c]:
+                counts.append(clusters[c][dataset.vs_dict[verb]])
+            else:
+                counts.append(0)
+
+        if use_softmax:
+            softmax_list = softmax(counts)
+            cluster = int(softmax_list.argmax(axis=0))
+            if isinstance(cluster, int):
+                final_clusters[cluster].append((verb, softmax_list[cluster]))
+        else:
+            norm_list = normalize(counts)
+            cluster = int(norm_list.argmax(axis=0))
+            if isinstance(cluster, int):
+                final_clusters[cluster].append((verb, norm_list[cluster]))
+
+    return final_clusters
+
+#print top n of clusters
+def print_clusters(clusters, n):
+    for i in range(len(clusters)):
+        print("Cluster: %d" % (i))
+        for line in sorted(clusters[i], key=lambda tup: tup[1],reverse=True)[:n]:
+            print(line  )
+
+
+
+
+if __name__ == "__main__":
+    make_new_latent_vectors = False
+
+    if make_new_latent_vectors:
+        latent_vectors = get_latent_vectors()
+    else:
+        latent_vectors = pickle.load(open("../out/latent_vectors.p", "rb"))
+
+    clusters = create_final_clusters(determine_ys_cluster(latent_vectors, ys), dataset)
+    pickle.dump(clusters, open("../out/clusters.p", "wb"))
+
+    print_clusters(clusters, 6)

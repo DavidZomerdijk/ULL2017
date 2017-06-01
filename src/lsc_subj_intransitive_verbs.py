@@ -62,7 +62,7 @@ class SubjectIntransitiveVerbClasses:
 
             print('%i: Log-likelihood: %f' % (i, likelihood))
 
-            if i % 10 == 0:
+            if i % 25 == 0 and i != 0:
                 self.store()
 
     def em_iter(self, fs):
