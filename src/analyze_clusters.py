@@ -152,6 +152,9 @@ def get_latent_vectors():
 def softmax(x):
     e_x = np.exp(x - np.max(x))
     return e_x / e_x.sum()
+def normalize(x):
+    x = np.array(x)
+    return x / x.max(axis=0)
 
 def determine_ys_cluster(l_vectors, ys):
     ys_clusters = defaultdict(lambda: defaultdict(int))
@@ -162,7 +165,7 @@ def determine_ys_cluster(l_vectors, ys):
     return ys_clusters
 
 
-def create_final_clusters(clusters, dataset):
+def create_final_clusters(clusters, dataset, use_softmax = False):
     # Now determine which class occurs most often
     final_clusters = defaultdict(list)
 
@@ -175,17 +178,22 @@ def create_final_clusters(clusters, dataset):
                 counts.append(clusters[c][dataset.vs_dict[verb]])
             else:
                 counts.append(0)
-        softmax_list = softmax(counts)
 
-        cluster = int(softmax_list.argmax(axis=0))
+        if use_softmax:
+            softmax_list = softmax(counts)
+            cluster = int(softmax_list.argmax(axis=0))
+            if isinstance(cluster, int):
+                final_clusters[cluster].append((verb, softmax_list[cluster]))
+        else:
+            norm_list = normalize(counts)
+            cluster = int(norm_list.argmax(axis=0))
+            if isinstance(cluster, int):
+                final_clusters[cluster].append((verb, norm_list[cluster]))
 
-        if isinstance(cluster, int):
-            final_clusters[cluster].append((verb, softmax_list[cluster]))
     return final_clusters
 
 #print top n of clusters
 def print_clusters(clusters, n):
-    print(len(clusters))
     for i in range(len(clusters)):
         print("Cluster: %d" % (i))
         for line in sorted(clusters[i], key=lambda tup: tup[1],reverse=True)[:n]:
