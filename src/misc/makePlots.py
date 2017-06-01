@@ -12,26 +12,36 @@ import matplotlib.pyplot as plt
 path = "../../out/"
 img_path = "../../out/img/"
 
-iterations = [x * 5 for x in range(31)] #[0,5,10,15,20,25,30,35,40,45,50,45,50]
-clusters = [5,10,20,30,40,50,75,100,200,300]
+iterations = [x * 5 for x in range(1,21)] #[0,5,10,15,20,25,30,35,40,45,50,45,50]
+clusters = [5,10,20,30,40,50,75,100,200,300,400,500]
 accuracies = dict()
 likelihoods = dict()
 
 for cluster in clusters:
-    model_path = path + "all_pairs_lcs-" + str(cluster)+"-150.pkl"
+    model_path = path + "all_pairs_lcs-" + str(cluster)+"-100.pkl"
     model = pickle.load(open(model_path, 'rb'))
     accuracies[cluster] = model.accuracies
     likelihoods[cluster] = model.likelihoods
 
 #Accuracy per cluster
-n_of_iterations = 150
-data =  [(cluster, accuracies[cluster][n_of_iterations])  for cluster in clusters]
+n_of_iterations = 100
+data1 =  [(cluster, accuracies[cluster][10])  for cluster in clusters]
+data2 =  [(cluster, accuracies[cluster][50])  for cluster in clusters]
+data3 =  [(cluster, accuracies[cluster][75])  for cluster in clusters]
+data4 =  [(cluster, accuracies[cluster][100])  for cluster in clusters]
 
-x_val = [x[0] for x in data]
-y_val = [x[1] for x in data]
-line1, = plt.plot(x_val,y_val, marker = 'o',label="after iterations")
-plt.legend(handles=[line1], loc=4)
-plt.axis([0, 305, 0.70, 0.82])
+x_val = [x[0] for x in data1]
+y_val1 = [x[1] for x in data1]
+y_val2 = [x[1] for x in data2]
+y_val3 = [x[1] for x in data3]
+y_val4 = [x[1] for x in data4]
+
+line1, = plt.plot(x_val,y_val1, marker = 'o',label="after 10 iterations")
+line2, = plt.plot(x_val,y_val2, marker = 'v',label="after 50 iterations")
+line3, = plt.plot(x_val,y_val3, marker = '^',label="after 75 iterations")
+line4, = plt.plot(x_val,y_val4, marker = 'x',label="after 100 iterations")
+plt.legend(handles=[line1, line2, line3, line4], loc=4)
+plt.axis([0, 505, 0.70, 0.80])
 plt.xlabel('number of classes')
 plt.ylabel('accuracy')
 plt.savefig(img_path + 'accuracy_clusters.pdf')
@@ -49,6 +59,8 @@ y_val_50 = [accuracies[50][iteration] for iteration in iterations]
 y_val_75 = [accuracies[75][iteration] for iteration in iterations]
 y_val_100 = [accuracies[100][iteration] for iteration in iterations]
 y_val_300 = [accuracies[300][iteration] for iteration in iterations]
+y_val_400 = [accuracies[400][iteration] for iteration in iterations]
+y_val_500 = [accuracies[500][iteration] for iteration in iterations]
 
 line1, = plt.plot(x_val,y_val_5,  marker='s', label="5 classes" )
 line2, = plt.plot(x_val,y_val_50, marker='o', label="50 classes" )
@@ -57,13 +69,15 @@ line4, = plt.plot(x_val,y_val_300, marker='v', label="300 classes" )
 
 #extra
 line5, = plt.plot(x_val,y_val_10, marker='v', label="10 classes" )
-line6, = plt.plot(x_val,y_val_20, marker='v', label="20 classes" )
-line7, = plt.plot(x_val,y_val_30, marker='v', label="30 classes" )
-line8, = plt.plot(x_val,y_val_40, marker='v', label="40 classes" )
-line9, = plt.plot(x_val,y_val_75, marker='v', label="75 classes" )
+# line6, = plt.plot(x_val,y_val_20, marker='v', label="20 classes" )
+# line7, = plt.plot(x_val,y_val_30, marker='v', label="30 classes" )
+# line8, = plt.plot(x_val,y_val_40, marker='v', label="40 classes" )
+# line9, = plt.plot(x_val,y_val_75, marker='v', label="75 classes" )
+# line10, = plt.plot(x_val,y_val_400, marker='x', label="400 classes" )
+line11, = plt.plot(x_val,y_val_500, marker='x', label="500 classes" )
 
-plt.legend(handles=[line1, line5, line6, line2,line3, line4], loc=4)
-plt.axis([0, 150, 0.50, 0.90])
+plt.legend(handles=[line1, line2, line3, line4, line5, line11], loc=4)
+plt.axis([3, 102, 0.55, 0.80])
 plt.xlabel('number of iterations')
 plt.ylabel('accuracy')
 # plt.axis('tight')
@@ -73,21 +87,23 @@ plt.close()
 
 #Likelihood progression
 # data =  [(cluster, likelihoods[cluster][50])  for cluster in clusters]
-max_iter = 20
+max_iter = 40
 x_val = range(1,max_iter)
 y_val_5 = [likelihoods[5][iteration]for iteration in range(1,max_iter)]
 # y_val_50 = [math.log1p( -likelihoods[50][iteration]) for iteration in range(1,max_iter)]
 y_val_50 = [likelihoods[50][iteration] for iteration in range(1,max_iter)]
 y_val_100 = [likelihoods[100][iteration] for iteration in range(1,max_iter)]
 y_val_300 = [likelihoods[300][iteration] for iteration in range(1,max_iter)]
+y_val_500 = [likelihoods[500][iteration] for iteration in range(1,max_iter)]
 
 line1, = plt.plot(x_val,y_val_5,   label="5 classes" )
 line2, = plt.plot(x_val,y_val_50,  label="50 classes" )
 line3, = plt.plot(x_val,y_val_100,  label="100 classes" )
 line4, = plt.plot(x_val,y_val_300,  label="300 classes" )
+line5, = plt.plot(x_val,y_val_500,  label="500 classes" )
 
-plt.legend(handles=[line4,line3,line2,line1], loc=1)
-plt.xlim([1, max_iter])
+plt.legend(handles=[line5,line4,line3,line2,line1], loc=1)
+plt.xlim([1, max_iter-1])
 plt.xlabel('number of iterations')
 plt.ylabel('log likelihood')
 plt.savefig(img_path +'likelihood_part1.pdf')
@@ -95,27 +111,33 @@ plt.close()
 
 #likelihood part 2
 
-clusters = [5,50,100,300]
+clusters = [5,50,100,300,500]
 likelihoods = dict()
 
 for cluster in clusters:
-    model_path = path + "all_pairs_intransitive_class-" + str(cluster)+"-150.pkl"
+    model_path = path + "all_pairs_intransitive_class-" + str(cluster)+"-100.pkl"
     model = pickle.load(open(model_path, 'rb'))
     likelihoods[cluster] = model.likelihoods
 
-x_val = range(1,50)
-y_val_5 = [likelihoods[5][iteration] for iteration in range(1,50)]
-y_val_50 = [likelihoods[50][iteration] for iteration in range(1,50)]
-y_val_100 = [likelihoods[100][iteration] for iteration in range(1,50)]
-y_val_300 = [likelihoods[300][iteration] for iteration in range(1,50)]
+max_iter = 15
+
+x_val = range(1,max_iter)
+y_val_5 = [likelihoods[5][iteration] for iteration in range(1,max_iter)]
+y_val_50 = [likelihoods[50][iteration] for iteration in range(1,max_iter)]
+y_val_100 = [likelihoods[100][iteration] for iteration in range(1,max_iter)]
+y_val_300 = [likelihoods[300][iteration] for iteration in range(1,max_iter)]
+y_val_500 = [likelihoods[500][iteration] for iteration in range(1,max_iter)]
 
 line1, = plt.plot(x_val,y_val_5,   label="5 classes" )
 line2, = plt.plot(x_val,y_val_50,  label="50 classes" )
 line3, = plt.plot(x_val,y_val_100,  label="100 classes" )
 line4, = plt.plot(x_val,y_val_300,  label="300 classes" )
+line5, = plt.plot(x_val,y_val_500,  label="500 classes" )
 
-plt.legend(handles=[line4,line3,line2,line1], loc=1)
+plt.legend(handles=[line5, line4, line3,line2,line1], loc=1)
 
+plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+plt.xlim([1, max_iter-1])
 plt.xlabel('number of iterations')
 plt.ylabel('log likelihood')
 plt.savefig(img_path +'likelihood_part2.pdf')

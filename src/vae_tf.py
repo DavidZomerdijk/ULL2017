@@ -92,6 +92,14 @@ v_sce = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=v_lo
 n_sce = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=n_logits, labels=N))
 p_sce = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=p_logits, labels=P))
 
+V_prediction = tf.argmax(tf.nn.softmax(logits=v_logits), axis=1)
+N_prediction = tf.argmax(tf.nn.softmax(logits=n_logits), axis=1)
+P_prediction = tf.argmax(tf.nn.softmax(logits=p_logits), axis=1)
+
+V_accuracy = tf.contrib.metrics.accuracy(V_prediction, V)
+N_accuracy = tf.contrib.metrics.accuracy(N_prediction, N)
+P_accuracy = tf.contrib.metrics.accuracy(P_prediction, P)
+
 BCE = v_sce + n_sce + p_sce
 
 loss = tf.reduce_mean(BCE + KLD)
@@ -110,7 +118,8 @@ saver = tf.train.Saver()
 n_epochs = 10
 batch_size = 100
 
-ys = dataset.ys
+ys_train = dataset.ys
+ys_test = dataset.ys_test
 
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
@@ -127,23 +136,38 @@ with tf.Session() as sess:
     print("Initializing parameters")
     sess.run(tf.global_variables_initializer())
 
+  _, ns_test, vs_test, ps_test = [list(t) for t in zip(*ys_test)]
+  feed_dict_test = {V: vs_test, N: ns_test, P: ps_test}
+
   step = 0
   for epoch in range(1, n_epochs):
 
-    random.shuffle(ys)
+    random.shuffle(ys_train)
 
-    for batch in list(chunks(ys, batch_size)):
+    for batch in list(chunks(ys_train, batch_size)):
       _, ns, vs, ps = [list(t) for t in zip(*batch)]
 
       step += 1
 
       feed_dict = {V: vs, N: ns, P: ps}
-      _, cur_loss, summary_str = sess.run([train_step, loss, summary_op], feed_dict=feed_dict)
-      summary_writer.add_summary(summary_str, step)
-
-      if step % 500 == 0:
-        save_path = saver.save(sess, "../out/model-2.ckpt")
 
       if step % 50 == 0:
+        _, cur_loss, summary_str = sess.run([train_step, loss, summary_op], feed_dict=feed_dict)
+        summary_writer.add_summary(summary_str, step)
         print("Step {0} | Epoch {1} | Loss: {2}".format(step, epoch, cur_loss))
+      else:
+        sess.run([train_step], feed_dict=feed_dict)
+
+      feed_dict = {V: vs, N: ns, P: ps}
+
+      if step % 1000 == 0:
+        test_loss, v_acc, n_acc, p_acc = sess.run([loss, V_accuracy, N_accuracy, P_accuracy], feed_dict=feed_dict)
+        print("Step {0} | Epoch {1} | Test-Loss: {2} | Verb Accuracy: {3} | Noun Accuracy: {4} | POS Accuracy: {5}".format(step, epoch, test_loss, v_acc, n_acc, p_acc))
+      else:
+        sess.run([train_step], feed_dict=feed_dict)
+
+      if step % 10000 == 0:
+        save_path = saver.save(sess, "../out/model-2.ckpt")
+
+
 
