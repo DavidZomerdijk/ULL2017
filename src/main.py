@@ -26,7 +26,7 @@ def main():
     gold_corpus = path.join(data_path, 'gold_deps.txt')
     all_pairs = path.join(data_path, 'all_pairs')
 
-    dataset = Dataset.load(all_pairs, n_test_pairs=10000)
+    dataset = Dataset.load(all_pairs, n_test_pairs=10001)
 
     # Parameter grid
     parameters = [

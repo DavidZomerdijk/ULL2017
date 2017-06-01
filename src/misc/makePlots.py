@@ -102,7 +102,7 @@ line3, = plt.plot(x_val,y_val_100,  label="100 classes" )
 line4, = plt.plot(x_val,y_val_300,  label="300 classes" )
 line5, = plt.plot(x_val,y_val_500,  label="500 classes" )
 
-plt.legend(handles=[line5,line4,line3,line2,line1], loc=1)
+plt.legend(handles=[line5,line4,line3,line2,line1], loc=4)
 plt.xlim([1, max_iter-1])
 plt.xlabel('number of iterations')
 plt.ylabel('log likelihood')
@@ -128,17 +128,64 @@ y_val_100 = [likelihoods[100][iteration] for iteration in range(1,max_iter)]
 y_val_300 = [likelihoods[300][iteration] for iteration in range(1,max_iter)]
 y_val_500 = [likelihoods[500][iteration] for iteration in range(1,max_iter)]
 
-line1, = plt.plot(x_val,y_val_5,   label="5 classes" )
-line2, = plt.plot(x_val,y_val_50,  label="50 classes" )
-line3, = plt.plot(x_val,y_val_100,  label="100 classes" )
-line4, = plt.plot(x_val,y_val_300,  label="300 classes" )
-line5, = plt.plot(x_val,y_val_500,  label="500 classes" )
+line1, = plt.plot(x_val, y_val_5, label="5 classes")
+line2, = plt.plot(x_val, y_val_50, label="50 classes")
+line3, = plt.plot(x_val, y_val_100, label="100 classes")
+line4, = plt.plot(x_val, y_val_300, label="300 classes")
+line5, = plt.plot(x_val, y_val_500, label="500 classes")
 
-plt.legend(handles=[line5, line4, line3,line2,line1], loc=1)
+plt.legend(handles=[line5, line4, line3,line2,line1], loc=4)
 
 plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
 plt.xlim([1, max_iter-1])
 plt.xlabel('number of iterations')
 plt.ylabel('log likelihood')
-plt.savefig(img_path +'likelihood_part2.pdf')
+plt.savefig(img_path + 'likelihood_part2.pdf')
+plt.close()
+
+
+
+
+
+v_accs, n_accs, p_accs, test_losses, train_losses = \
+    pickle.load(open(path + 'vae_results-2.pkl', 'rb'))
+
+iterations = [x * 10 for x in range(1, 1658)]
+x_val_train = iterations
+y_val_train = [train_losses[iteration]for iteration in iterations]
+
+iterations = [x * 100 for x in range(1, 165)]
+x_val_test = iterations
+y_val_test = [test_losses[iteration] for iteration in iterations]
+
+line1, = plt.plot(x_val_train, y_val_train,   label="train" )
+line2, = plt.plot(x_val_test, y_val_test,  label="test" )
+
+plt.legend(handles=[line1, line2], loc=1)
+
+plt.xlim([100, 5000])
+plt.ylim([3, 15])
+plt.xlabel('number of steps')
+plt.ylabel('loss')
+plt.savefig(img_path + 'vae_loss.pdf')
+plt.close()
+
+
+
+iterations = [x * 100 for x in range(1, 165)]
+x_val = [0] + iterations
+y_val1 = [0] + [v_accs[iteration]for iteration in iterations]
+y_val2 = [0] + [n_accs[iteration]for iteration in iterations]
+y_val3 = [0] + [p_accs[iteration]for iteration in iterations]
+
+line1, = plt.plot(x_val, y_val1, label="verb accuracy" )
+line2, = plt.plot(x_val, y_val2,  label="noun accuracy" )
+line3, = plt.plot(x_val, y_val3, label="subcategorization frame accuracy" )
+
+plt.legend(handles=[line1, line2, line3], loc=4)
+
+plt.xlim([0, 5000])
+plt.xlabel('number of steps')
+plt.ylabel('accuracy on the test set')
+plt.savefig(img_path + 'vae_acc.pdf')
 plt.close()

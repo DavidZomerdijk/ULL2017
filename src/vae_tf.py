@@ -2,6 +2,7 @@ from __future__ import division
 from __future__ import print_function
 import os.path
 import random
+import pickle
 from dataset import Dataset
 
 import tensorflow as tf
@@ -18,10 +19,10 @@ n_dim = dataset.n_ns
 p_dim = dataset.n_ps
 
 input_dim = v_dim + n_dim + p_dim
-hidden_encoder_dim = 600
-hidden_decoder_dim = 600
-latent_dim = 30
-lam = 0.01
+hidden_encoder_dim = 300
+hidden_decoder_dim = 300
+latent_dim = 50
+lam = 0.0001
 
 def weight_variable(shape):
   initial = tf.truncated_normal(shape, stddev=0.001)
@@ -82,15 +83,15 @@ W_decoder_hidden_reconstruction = weight_variable([hidden_decoder_dim, input_dim
 b_decoder_hidden_reconstruction = bias_variable([input_dim])
 l2_loss += tf.nn.l2_loss(W_decoder_hidden_reconstruction)
 
-KLD = -0.5 * tf.reduce_sum(1 + logvar_encoder - tf.pow(mu_encoder, 2) - tf.exp(logvar_encoder), reduction_indices=1)
+KLD = -0.5 * tf.reduce_mean(1 + logvar_encoder - tf.pow(mu_encoder, 2) - tf.exp(logvar_encoder), reduction_indices=1)
 
 x_hat = tf.matmul(hidden_decoder, W_decoder_hidden_reconstruction) + b_decoder_hidden_reconstruction
 
 v_logits, n_logits, p_logits = tf.split(x_hat, [v_dim, n_dim, p_dim], 1)
 
-v_sce = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=v_logits, labels=V))
-n_sce = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=n_logits, labels=N))
-p_sce = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=p_logits, labels=P))
+v_sce = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=v_logits, labels=V))
+n_sce = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=n_logits, labels=N))
+p_sce = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=p_logits, labels=P))
 
 V_prediction = tf.to_int32(tf.argmax(tf.nn.softmax(logits=v_logits), axis=1))
 N_prediction = tf.to_int32(tf.argmax(tf.nn.softmax(logits=n_logits), axis=1))
@@ -116,7 +117,7 @@ summary_op = tf.summary.merge_all()
 saver = tf.train.Saver()
 
 n_epochs = 10
-batch_size = 100
+batch_size = 512
 
 ys_train = dataset.ys
 ys_test = dataset.ys_test
@@ -129,15 +130,21 @@ def chunks(l, n):
 with tf.Session() as sess:
   summary_writer = tf.summary.FileWriter('../out/tf/experiment',
                                           graph=sess.graph)
-  if os.path.isfile("../out/model-2.ckpt"):
+  if os.path.isfile("../out/vae-2.ckpt"):
     print("Restoring saved parameters")
-    saver.restore(sess, "../out/model-2.ckpt")
+    saver.restore(sess, "../out/vae-2.ckpt")
   else:
     print("Initializing parameters")
     sess.run(tf.global_variables_initializer())
 
   _, ns_test, vs_test, ps_test = [list(t) for t in zip(*ys_test)]
   feed_dict_test = {V: vs_test, N: ns_test, P: ps_test}
+
+  v_accs = dict()
+  p_accs = dict()
+  n_accs = dict()
+  train_losses = dict()
+  test_losses = dict()
 
   step = 0
   for epoch in range(1, n_epochs):
@@ -151,23 +158,34 @@ with tf.Session() as sess:
 
       feed_dict = {V: vs, N: ns, P: ps}
 
-      if step % 50 == 0:
+      if step % 10 == 0:
         _, cur_loss, summary_str = sess.run([train_step, loss, summary_op], feed_dict=feed_dict)
         summary_writer.add_summary(summary_str, step)
+        train_losses[step] = cur_loss
         print("Step {0} | Epoch {1} | Loss: {2}".format(step, epoch, cur_loss))
       else:
         sess.run([train_step], feed_dict=feed_dict)
 
       feed_dict = {V: vs, N: ns, P: ps}
 
-      if step % 1000 == 0:
+      if step % 100 == 0:
         test_loss, v_acc, n_acc, p_acc = sess.run([loss, V_accuracy, N_accuracy, P_accuracy], feed_dict=feed_dict)
+        v_accs[step] = v_acc
+        n_accs[step] = n_acc
+        p_accs[step] = p_acc
+        test_losses[step] = test_loss
         print("Step {0} | Epoch {1} | Test-Loss: {2} | Verb Accuracy: {3} | Noun Accuracy: {4} | POS Accuracy: {5}".format(step, epoch, test_loss, v_acc, n_acc, p_acc))
       else:
         sess.run([train_step], feed_dict=feed_dict)
 
-      if step % 10000 == 0:
-        save_path = saver.save(sess, "../out/model-2.ckpt")
+      if step % 1000 == 0:
+        pickle.dump((v_accs, n_accs, p_accs, test_losses, train_losses),
+                    open('../out/vae_results-2.pkl', 'wb'))
+        saver.save(sess, "../out/vae-2.ckpt")
+
+  pickle.dump((v_accs, n_accs, p_accs, test_losses, train_losses),
+                    open('../out/vae_results-2.pkl', 'wb'))
+  saver.save(sess, "../out/vae-2.ckpt")
 
 
 
