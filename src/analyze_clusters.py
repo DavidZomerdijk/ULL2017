@@ -165,7 +165,7 @@ def determine_ys_cluster(l_vectors, ys):
     return ys_clusters
 
 
-def create_final_clusters(clusters, dataset, use_softmax = False):
+def create_final_clusters(clusters, dataset, use_softmax = True):
     # Now determine which class occurs most often
     final_clusters = defaultdict(list)
 
