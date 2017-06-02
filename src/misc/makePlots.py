@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 path = "../../out/"
 img_path = "../../out/img/"
 
-iterations = [x * 5 for x in range(1,21)] #[0,5,10,15,20,25,30,35,40,45,50,45,50]
-clusters = [5,10,20,30,40,50,75,100,200,300,400,500]
+iterations = [x * 5 for x in range(1,21)]  #[0,5,10,15,20,25,30,35,40,45,50,45,50]
+clusters = [5, 10, 20, 30, 40, 50, 75, 100, 200, 300, 400, 500]
 accuracies = dict()
 likelihoods = dict()
 
@@ -76,7 +76,7 @@ line5, = plt.plot(x_val,y_val_10, marker='v', label="10 classes" )
 # line10, = plt.plot(x_val,y_val_400, marker='x', label="400 classes" )
 line11, = plt.plot(x_val,y_val_500, marker='x', label="500 classes" )
 
-plt.legend(handles=[line1, line2, line3, line4, line5, line11], loc=4)
+plt.legend(handles=[line1, line5, line2, line3, line4, line11], loc=4)
 plt.axis([3, 102, 0.55, 0.80])
 plt.xlabel('number of iterations')
 plt.ylabel('accuracy')
@@ -179,7 +179,7 @@ y_val2 = [0] + [n_accs[iteration]for iteration in iterations]
 y_val3 = [0] + [p_accs[iteration]for iteration in iterations]
 
 line1, = plt.plot(x_val, y_val1, label="verb accuracy" )
-line2, = plt.plot(x_val, y_val2,  label="noun accuracy" )
+line2, = plt.plot(x_val, y_val2, label="noun accuracy" )
 line3, = plt.plot(x_val, y_val3, label="subcategorization frame accuracy" )
 
 plt.legend(handles=[line1, line2, line3], loc=4)
