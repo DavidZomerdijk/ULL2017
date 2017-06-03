@@ -92,7 +92,7 @@ class VAEVerbClasses:
         l2_loss += tf.nn.l2_loss(W_decoder_z_hidden)
 
         # Hidden layer decoder
-        hidden_decoder = tf.nn.relu(tf.matmul(z, W_decoder_z_hidden) + b_decoder_z_hidden)
+        hidden_decoder = tf.nn.relu(tf.matmul(self.z, W_decoder_z_hidden) + b_decoder_z_hidden)
 
         W_decoder_hidden_reconstruction = weight_variable([hidden_dim, input_dim])
         b_decoder_hidden_reconstruction = bias_variable([input_dim])
