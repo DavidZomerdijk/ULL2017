@@ -109,6 +109,8 @@ plt.ylabel('log likelihood')
 plt.savefig(img_path +'likelihood_part1.pdf')
 plt.close()
 
+
+
 #likelihood part 2
 
 clusters = [5,50,100,300,500]
@@ -143,28 +145,24 @@ plt.ylabel('log likelihood')
 plt.savefig(img_path + 'likelihood_part2.pdf')
 plt.close()
 
+v_accs, n_accs, p_accs, pda_accs, test_losses, train_losses = \
+    pickle.load(open(path + '/tf2/plot_results.pkl', 'rb'))
 
-
-
-
-v_accs, n_accs, p_accs, test_losses, train_losses = \
-    pickle.load(open(path + 'vae_results-2.pkl', 'rb'))
-
-iterations = [x * 10 for x in range(1, 1658)]
+iterations = [x * 10 for x in range(0, 829)]
 x_val_train = iterations
 y_val_train = [train_losses[iteration]for iteration in iterations]
 
-iterations = [x * 100 for x in range(1, 165)]
+iterations = [x * 20 for x in range(0, 12)] + [x * 100 for x in range(3, 82)]
 x_val_test = iterations
 y_val_test = [test_losses[iteration] for iteration in iterations]
 
-line1, = plt.plot(x_val_train, y_val_train,   label="train" )
-line2, = plt.plot(x_val_test, y_val_test,  label="test" )
+line1, = plt.plot(x_val_train, y_val_train, label="train")
+line2, = plt.plot(x_val_test, y_val_test, label="test")
 
 plt.legend(handles=[line1, line2], loc=1)
 
-plt.xlim([100, 5000])
-plt.ylim([3, 15])
+plt.xlim([0, 5000])
+plt.ylim([2, 15])
 plt.xlabel('number of steps')
 plt.ylabel('loss')
 plt.savefig(img_path + 'vae_loss.pdf')
@@ -172,11 +170,11 @@ plt.close()
 
 
 
-iterations = [x * 100 for x in range(1, 165)]
+iterations = [x * 20 for x in range(0, 12)] + [x * 100 for x in range(3, 82)]
 x_val = [0] + iterations
-y_val1 = [0] + [v_accs[iteration]for iteration in iterations]
-y_val2 = [0] + [n_accs[iteration]for iteration in iterations]
-y_val3 = [0] + [p_accs[iteration]for iteration in iterations]
+y_val1 = [0] + [v_accs[iteration] for iteration in iterations]
+y_val2 = [0] + [n_accs[iteration] for iteration in iterations]
+y_val3 = [0] + [p_accs[iteration] for iteration in iterations]
 
 line1, = plt.plot(x_val, y_val1, label="verb accuracy" )
 line2, = plt.plot(x_val, y_val2, label="noun accuracy" )
@@ -188,4 +186,31 @@ plt.xlim([0, 5000])
 plt.xlabel('number of steps')
 plt.ylabel('accuracy on the test set')
 plt.savefig(img_path + 'vae_acc.pdf')
+plt.close()
+
+
+iterations = [x * 20 for x in range(0, 12)] + [x * 100 for x in range(3, 120)]
+x_val = [0] + iterations
+y_val1 = [0] + [pda_accs[iteration] for iteration in iterations]
+
+line1, = plt.plot(x_val, y_val1, label="pseudo disambiguation accuracy")
+
+plt.legend(handles=[line1,], loc=1)
+
+plt.xlim([0, 10000])
+plt.ylim([0.45, 0.8])
+plt.xlabel('number of steps')
+plt.ylabel('accuracy on the test set')
+plt.savefig(img_path + 'vae_pd_acc.pdf')
+plt.close()
+
+line1, = plt.plot(x_val, y_val1, label="pseudo disambiguation accuracy")
+
+plt.legend(handles=[line1,], loc=1)
+
+plt.xlim([0, 250])
+plt.ylim([0.45, 0.8])
+plt.xlabel('number of steps')
+plt.ylabel('accuracy on the test set')
+plt.savefig(img_path + 'vae_pd_acc_250.pdf')
 plt.close()

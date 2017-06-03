@@ -19,7 +19,7 @@ class VAEVerbClasses:
     Verb classes (corresponding to Section 2 in the paper https://arxiv.org/abs/cs/9905008)
     """
 
-    def __init__(self, dataset, hidden_dim=600, latent_dim=50, lam=0.0001, file_dir='../out/tf'):
+    def __init__(self, dataset, hidden_dim=600, latent_dim=50, lam=0.0001, file_dir='../out/tf2'):
         """
         :param dataset: The dataset for which to train
         :param n_cs: Number of classes
@@ -85,7 +85,7 @@ class VAEVerbClasses:
 
         # Sample latent variable
         std_encoder = tf.exp(0.5 * logvar_encoder)
-        z = mu_encoder + tf.multiply(std_encoder, epsilon)
+        self.z = mu_encoder + tf.multiply(std_encoder, epsilon)
 
         W_decoder_z_hidden = weight_variable([latent_dim, hidden_dim])
         b_decoder_z_hidden = bias_variable([hidden_dim])
@@ -132,7 +132,7 @@ class VAEVerbClasses:
         # add Saver ops
         self.saver = tf.train.Saver()
 
-    def train(self, n_epochs=10, batch_size=1024, lower_bound_pde=30):
+    def train(self, n_epochs=50, batch_size=1024, lower_bound_pde=30):
 
         # add op for merging summary
         summary_op = tf.summary.merge_all()
@@ -207,11 +207,11 @@ class VAEVerbClasses:
                         sess.run([self.train_step], feed_dict=feed_dict)
 
                     if step % 1000 == 0 and step != 0:
-                        self.store(sess, (v_accs, n_accs, p_accs, test_losses, train_losses))
+                        self.store(sess, (v_accs, n_accs, p_accs, pde_accs, test_losses, train_losses))
 
                     step += 1
 
-            self.store(sess, (v_accs, n_accs, p_accs, test_losses, train_losses))
+            self.store(sess, (v_accs, n_accs, p_accs, pde_accs, test_losses, train_losses))
 
     def p_n_v(self, n, vp):
         """
@@ -236,9 +236,9 @@ class VAEVerbClasses:
         :return:
         """
 
-        pickle.dump(plot_data, open(self.file_dir + '/plot_results.pkl', 'wb'))
-
         self.saver.save(sess, self.file_dir + "/vae-model.ckpt")
+
+        pickle.dump(plot_data, open(self.file_dir + '/plot_results.pkl', 'wb'))
 
     def initialize_parameters(self, sess):
 
