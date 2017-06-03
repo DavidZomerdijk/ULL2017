@@ -3,16 +3,13 @@ from __future__ import print_function
 import os.path
 import random
 import pickle
+import numpy as np
 from dataset import Dataset
+from eval_pseudo_disambiguation import EvaluationPseudoDisambiguation
 
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 
-data_path = os.path.join(os.path.dirname(__file__), '..', 'data')
-gold_corpus = os.path.join(data_path, 'gold_deps.txt')
-all_pairs = os.path.join(data_path, 'all_pairs')
-
-dataset = Dataset.load(all_pairs, n_test_pairs=10000)
 
 class VAEVerbClasses:
     """
@@ -22,13 +19,14 @@ class VAEVerbClasses:
     Verb classes (corresponding to Section 2 in the paper https://arxiv.org/abs/cs/9905008)
     """
 
-    def __init__(self, dataset, hidden_dim=600, latent_dim=50, lam=0.0001):
+    def __init__(self, dataset, hidden_dim=600, latent_dim=50, lam=0.0001, file_dir='../out/tf'):
         """
         :param dataset: The dataset for which to train
         :param n_cs: Number of classes
         :param em_iters: Iterations
         """
         self.dataset = dataset
+        self.file_dir = file_dir
 
         v_dim = dataset.n_vs
         n_dim = dataset.n_ns
@@ -44,16 +42,20 @@ class VAEVerbClasses:
             initial = tf.constant(0., shape=shape)
             return tf.Variable(initial)
 
-        self.include_VP = tf.placeholder("int32", shape=[1])
+        self.include_VP = tf.placeholder("int32", shape=[])
         self.V = tf.placeholder("int32", shape=[None])
         self.N = tf.placeholder("int32", shape=[None])
         self.P = tf.placeholder("int32", shape=[None])
 
-        v = tf.cond(self.include_VP > 0, lambda: tf.one_hot(self.V, v_dim), lambda: tf.zeros(v_dim))
+        v = tf.one_hot(self.V, v_dim)
         n = tf.one_hot(self.N, n_dim)
-        p = tf.cond(self.include_VP > 0, lambda: tf.one_hot(self.P, p_dim), lambda: tf.zeros(p_dim))
+        p = tf.one_hot(self.P, p_dim)
 
-        x = tf.concat([v, n, p], 1)
+        v0 = 0.0 * v
+        p0 = 0.0 * p
+        n0 = 1.0 * n
+
+        x = tf.cond(self.include_VP > 0, lambda: tf.concat([v, n, p], 1), lambda: tf.concat([v0 , n0, p0], 1))
 
         l2_loss = tf.constant(0.0)
 
@@ -106,6 +108,10 @@ class VAEVerbClasses:
         n_sce = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=n_logits, labels=self.N))
         p_sce = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=p_logits, labels=self.P))
 
+        # x_log_dim = np.log(v_dim) + np.log(n_dim) + np.log(p_dim)
+        # self.loss = tf.reduce_mean(np.log(v_dim) / x_log_dim * v_sce + np.log(n_dim) / x_log_dim * n_sce + np.log(p_dim) / x_log_dim * p_sce + KLD)
+        # x_dim = v_dim + n_dim + p_dim
+        # self.loss = tf.reduce_mean(v_dim / x_dim * v_sce + n_dim / x_dim * n_sce + p_dim / x_dim * p_sce + KLD)
         self.loss = tf.reduce_mean(v_sce + n_sce + p_sce + KLD)
         tf.summary.scalar("lowerbound", self.loss)
 
@@ -126,13 +132,14 @@ class VAEVerbClasses:
         # add Saver ops
         self.saver = tf.train.Saver()
 
-    def train(self, n_epochs=10, batch_size=512):
+    def train(self, n_epochs=10, batch_size=1024, lower_bound_pde=30):
 
         # add op for merging summary
         summary_op = tf.summary.merge_all()
+        pseudo_disambiguation = EvaluationPseudoDisambiguation(self.dataset, self, lower_bound=lower_bound_pde)
 
-        ys_train = dataset.ys
-        ys_test = dataset.ys_test
+        ys_train = self.dataset.ys
+        ys_test = self.dataset.ys_test
 
         def chunks(l, n):
             """Yield successive n-sized chunks from l."""
@@ -141,15 +148,16 @@ class VAEVerbClasses:
 
         with tf.Session() as sess:
 
-            summary_writer = tf.summary.FileWriter('../out/tf/experiment', graph=sess.graph)
+            self.sess = sess
+
+            summary_writer = tf.summary.FileWriter(self.file_dir + '/summary', graph=sess.graph)
             self.initialize_parameters(sess)
 
-            _, ns_test, vs_test, ps_test = [list(t) for t in zip(*ys_test)]
-            feed_dict_test = {self.V: vs_test, self.N: ns_test, self.P: ps_test, self.include_VP: 1}
 
             v_accs = dict()
             p_accs = dict()
             n_accs = dict()
+            pde_accs = dict()
             train_losses = dict()
             test_losses = dict()
 
@@ -159,10 +167,36 @@ class VAEVerbClasses:
                 random.shuffle(ys_train)
 
                 for batch in list(chunks(ys_train, batch_size)):
+
+                    if (step < 250 and step % 20 == 0) or step % 100 == 0:
+
+                        test_batches = list(chunks(ys_test, batch_size))
+                        test_losses[step], v_accs[step], n_accs[step], p_accs[step] = 0.0, 0.0, 0.0, 0.0
+
+                        for test_batch in test_batches[:-1]:
+                            _, ns_test, vs_test, ps_test = [list(t) for t in zip(*test_batch)]
+                            feed_dict_test = {self.V: vs_test, self.N: ns_test, self.P: ps_test, self.include_VP: 1}
+                            batch_test_loss, batch_v_acc, batch_n_acc, batch_p_acc = sess.run([
+                                self.loss, self.V_accuracy,
+                                self.N_accuracy, self.P_accuracy
+                            ], feed_dict=feed_dict_test)
+
+                            test_losses[step] += batch_test_loss
+                            v_accs[step] += batch_v_acc
+                            n_accs[step] += batch_n_acc
+                            p_accs[step] += batch_p_acc
+
+                        test_losses[step] /= len(test_batches)
+                        v_accs[step] /= len(test_batches)
+                        n_accs[step] /= len(test_batches)
+                        p_accs[step] /= len(test_batches)
+
+                        pde_accs[step] = pseudo_disambiguation.evaluate()
+                        print(
+                            "Test-Loss: {0} | Peudo Disambiguation Accuracy: {1} | Verb Accuracy: {2} | Noun Accuracy: {3} | POS Accuracy: {4}".format(
+                                test_losses[step], pde_accs[step], v_accs[step], n_accs[step], p_accs[step]))
+
                     _, ns, vs, ps = [list(t) for t in zip(*batch)]
-
-                    step += 1
-
                     feed_dict = {self.V: vs, self.N: ns, self.P: ps, self.include_VP: 1}
 
                     if step % 10 == 0:
@@ -172,19 +206,10 @@ class VAEVerbClasses:
                     else:
                         sess.run([self.train_step], feed_dict=feed_dict)
 
-                    feed_dict = {self.V: vs, self.N: ns, self.P: ps}
-
-                    if step % 100 == 0:
-                        test_losses[step], v_accs[step], n_accs[step], p_accs[step] = sess.run([
-                            self.loss, self.V_accuracy,
-                            self.N_accuracy, self.P_accuracy
-                        ], feed_dict=feed_dict_test)
-                        print("Step {0} | Epoch {1} | Test-Loss: {2} | Verb Accuracy: {3} | Noun Accuracy: {4} | POS Accuracy: {5}".format(step, epoch, test_losses[step], v_accs[step], n_accs[step], p_accs[step]))
-                    else:
-                        sess.run([self.train_step], feed_dict=feed_dict)
-
-                    if step % 1000 == 0:
+                    if step % 1000 == 0 and step != 0:
                         self.store(sess, (v_accs, n_accs, p_accs, test_losses, train_losses))
+
+                    step += 1
 
             self.store(sess, (v_accs, n_accs, p_accs, test_losses, train_losses))
 
@@ -199,12 +224,11 @@ class VAEVerbClasses:
 
         feed_dict = {self.V: [0], self.N: [n], self.P: [0], self.include_VP: 0}
 
-        with tf.Session() as sess:
-            v_pred, p_pred = sess.run([
-                self.V_prediction, self.P_prediction
-            ], feed_dict=feed_dict)
+        v_pred, p_pred = self.sess.run([
+            self.V_prediction, self.P_prediction
+        ], feed_dict=feed_dict)
 
-            return v_pred[v] * p_pred[p]
+        return (np.log(v_pred[0,v]) + np.log(p_pred[0,p]))
 
     def store(self, sess, plot_data):
         """
@@ -212,15 +236,15 @@ class VAEVerbClasses:
         :return:
         """
 
-        pickle.dump(plot_data, open('../out/vae_results-2.pkl', 'wb'))
+        pickle.dump(plot_data, open(self.file_dir + '/plot_results.pkl', 'wb'))
 
-        self.saver.save(sess, "../out/vae-2.ckpt")
+        self.saver.save(sess, self.file_dir + "/vae-model.ckpt")
 
     def initialize_parameters(self, sess):
 
-        if os.path.isfile("../out/vae-2.ckpt"):
+        if os.path.isfile(self.file_dir + "/vae-model.ckpt"):
             print("Restoring saved parameters")
-            self.saver.restore(sess, "../out/vae-2.ckpt")
+            self.saver.restore(sess, self.file_dir + "/vae-model.ckpt")
         else:
             print("Initializing parameters")
             sess.run(tf.global_variables_initializer())
