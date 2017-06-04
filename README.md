@@ -4,7 +4,7 @@ An implementation of the paper: [*"Inducing a Semantically Annotated Lexicon via
 
 The original paper introduced **latent semantic clustering**, an unsupervised method to find good clusters of words from a dependency parsed corpus using an EM Algorithm.
 
-We wrote a report on this implementation as well, which can be found [here](https://www.overleaf.com/read/bmcfwrvyqnkq).
+We wrote a paper on this implementation as well, which can be found [here](paper.pdf).
 
 Our implementation is divided up into three steps:
 
