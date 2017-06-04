@@ -3,23 +3,19 @@ from __future__ import print_function
 import os.path
 import random
 import pickle
-import numpy as np
-from dataset import Dataset
 from eval_pseudo_disambiguation import EvaluationPseudoDisambiguation
 
 import tensorflow as tf
-from tensorflow.examples.tutorials.mnist import input_data
 
 
 class VAEVerbClasses:
     """
-    Latent Semantic Clustering for Verb Classes
+    Variational Auto Encoder for reconstructing verb noun subcategorization frames
 
-    This is the implementation of Step 1
-    Verb classes (corresponding to Section 2 in the paper https://arxiv.org/abs/cs/9905008)
+    This implementation was based on code from https://github.com/y0ast/VAE-TensorFlow
     """
 
-    def __init__(self, dataset, hidden_dim=600, latent_dim=50, lam=0.0001, file_dir='../out/tf2'):
+    def __init__(self, dataset, hidden_dim=600, latent_dim=50, lam=0.0001, file_dir='../out/vae'):
         """
         :param dataset: The dataset for which to train
         :param n_cs: Number of classes
@@ -42,7 +38,8 @@ class VAEVerbClasses:
             initial = tf.constant(0., shape=shape)
             return tf.Variable(initial)
 
-        self.include_VP = tf.placeholder("int32", shape=[])
+        # Allows us to ignore N for pseudo-disambiguation
+        self.include_N = tf.placeholder("int32", shape=[])
         self.V = tf.placeholder("int32", shape=[None])
         self.N = tf.placeholder("int32", shape=[None])
         self.P = tf.placeholder("int32", shape=[None])
@@ -51,11 +48,11 @@ class VAEVerbClasses:
         n = tf.one_hot(self.N, n_dim)
         p = tf.one_hot(self.P, p_dim)
 
-        v0 = 0.0 * v
-        p0 = 0.0 * p
-        n0 = 1.0 * n
+        v0 = 1.0 * v
+        p0 = 1.0 * p
+        n0 = 0.0 * n
 
-        x = tf.cond(self.include_VP > 0, lambda: tf.concat([v, n, p], 1), lambda: tf.concat([v0 , n0, p0], 1))
+        x = tf.cond(self.include_N > 0, lambda: tf.concat([v, n, p], 1), lambda: tf.concat([v0 , n0, p0], 1))
 
         l2_loss = tf.constant(0.0)
 
@@ -92,7 +89,7 @@ class VAEVerbClasses:
         l2_loss += tf.nn.l2_loss(W_decoder_z_hidden)
 
         # Hidden layer decoder
-        hidden_decoder = tf.nn.relu(tf.matmul(z, W_decoder_z_hidden) + b_decoder_z_hidden)
+        hidden_decoder = tf.nn.relu(tf.matmul(self.z, W_decoder_z_hidden) + b_decoder_z_hidden)
 
         W_decoder_hidden_reconstruction = weight_variable([hidden_dim, input_dim])
         b_decoder_hidden_reconstruction = bias_variable([input_dim])
@@ -108,10 +105,6 @@ class VAEVerbClasses:
         n_sce = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=n_logits, labels=self.N))
         p_sce = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=p_logits, labels=self.P))
 
-        # x_log_dim = np.log(v_dim) + np.log(n_dim) + np.log(p_dim)
-        # self.loss = tf.reduce_mean(np.log(v_dim) / x_log_dim * v_sce + np.log(n_dim) / x_log_dim * n_sce + np.log(p_dim) / x_log_dim * p_sce + KLD)
-        # x_dim = v_dim + n_dim + p_dim
-        # self.loss = tf.reduce_mean(v_dim / x_dim * v_sce + n_dim / x_dim * n_sce + p_dim / x_dim * p_sce + KLD)
         self.loss = tf.reduce_mean(v_sce + n_sce + p_sce + KLD)
         tf.summary.scalar("lowerbound", self.loss)
 
@@ -132,7 +125,10 @@ class VAEVerbClasses:
         # add Saver ops
         self.saver = tf.train.Saver()
 
-    def train(self, n_epochs=50, batch_size=1024, lower_bound_pde=30):
+    def train(self, n_epochs=100, batch_size=1024, lower_bound_pde=30):
+        """
+        This method actually starts training the TensorFlow model
+        """
 
         # add op for merging summary
         summary_op = tf.summary.merge_all()
@@ -168,14 +164,15 @@ class VAEVerbClasses:
 
                 for batch in list(chunks(ys_train, batch_size)):
 
-                    if (step < 250 and step % 20 == 0) or step % 100 == 0:
+                    # Evaluating on the test set
+                    if step % 100 == 0:
 
                         test_batches = list(chunks(ys_test, batch_size))
                         test_losses[step], v_accs[step], n_accs[step], p_accs[step] = 0.0, 0.0, 0.0, 0.0
 
                         for test_batch in test_batches[:-1]:
                             _, ns_test, vs_test, ps_test = [list(t) for t in zip(*test_batch)]
-                            feed_dict_test = {self.V: vs_test, self.N: ns_test, self.P: ps_test, self.include_VP: 1}
+                            feed_dict_test = {self.V: vs_test, self.N: ns_test, self.P: ps_test, self.include_N: 1}
                             batch_test_loss, batch_v_acc, batch_n_acc, batch_p_acc = sess.run([
                                 self.loss, self.V_accuracy,
                                 self.N_accuracy, self.P_accuracy
@@ -197,8 +194,9 @@ class VAEVerbClasses:
                                 test_losses[step], pde_accs[step], v_accs[step], n_accs[step], p_accs[step]))
 
                     _, ns, vs, ps = [list(t) for t in zip(*batch)]
-                    feed_dict = {self.V: vs, self.N: ns, self.P: ps, self.include_VP: 1}
+                    feed_dict = {self.V: vs, self.N: ns, self.P: ps, self.include_N: 1}
 
+                    # Training the batch
                     if step % 10 == 0:
                         _, train_losses[step], summary_str = sess.run([self.train_step, self.loss, summary_op], feed_dict=feed_dict)
                         summary_writer.add_summary(summary_str, step)
@@ -206,6 +204,7 @@ class VAEVerbClasses:
                     else:
                         sess.run([self.train_step], feed_dict=feed_dict)
 
+                    # Store model checkpoint
                     if step % 1000 == 0 and step != 0:
                         self.store(sess, (v_accs, n_accs, p_accs, pde_accs, test_losses, train_losses))
 
@@ -216,19 +215,21 @@ class VAEVerbClasses:
     def p_n_v(self, n, vp):
         """
         p(n|v)
+
+        Used for Pseudo-disambiguation
         """
 
         (vt, pt) = self.dataset.vps[vp]
         v = self.dataset.vs_dict[vt]
         p = self.dataset.ps_dict[pt]
 
-        feed_dict = {self.V: [0], self.N: [n], self.P: [0], self.include_VP: 0}
+        feed_dict = {self.V: [v], self.N: [0], self.P: [p], self.include_N: 0}
 
-        v_pred, p_pred = self.sess.run([
-            self.V_prediction, self.P_prediction
+        n_pred, = self.sess.run([
+            self.N_prediction
         ], feed_dict=feed_dict)
 
-        return (np.log(v_pred[0,v]) + np.log(p_pred[0,p]))
+        return n_pred[0,n]
 
     def store(self, sess, plot_data):
         """

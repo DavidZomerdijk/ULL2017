@@ -43,7 +43,7 @@ line4, = plt.plot(x_val,y_val4, marker = 'x',label="after 100 iterations")
 plt.legend(handles=[line1, line2, line3, line4], loc=4)
 plt.axis([0, 505, 0.70, 0.80])
 plt.xlabel('number of classes')
-plt.ylabel('accuracy')
+plt.ylabel('accuracy on the test set')
 plt.savefig(img_path + 'accuracy_clusters.pdf')
 plt.close()
 
@@ -79,7 +79,7 @@ line11, = plt.plot(x_val,y_val_500, marker='x', label="500 classes" )
 plt.legend(handles=[line1, line5, line2, line3, line4, line11], loc=4)
 plt.axis([3, 102, 0.55, 0.80])
 plt.xlabel('number of iterations')
-plt.ylabel('accuracy')
+plt.ylabel('accuracy on the test set')
 # plt.axis('tight')
 plt.savefig(img_path + 'accuracy_iterations.pdf')
 plt.close()
@@ -169,12 +169,15 @@ plt.savefig(img_path + 'vae_loss.pdf')
 plt.close()
 
 
+iterations = [x * 20 for x in range(0, 12)] + [x * 100 for x in range(3, 450)]
+x_val = iterations
+y_val1 = [v_accs[iteration] for iteration in iterations]
+y_val2 = [n_accs[iteration] for iteration in iterations]
+y_val3 = [p_accs[iteration] for iteration in iterations]
 
-iterations = [x * 20 for x in range(0, 12)] + [x * 100 for x in range(3, 82)]
-x_val = [0] + iterations
-y_val1 = [0] + [v_accs[iteration] for iteration in iterations]
-y_val2 = [0] + [n_accs[iteration] for iteration in iterations]
-y_val3 = [0] + [p_accs[iteration] for iteration in iterations]
+print("Max value verb: %f" % (max(y_val1),))
+print("Max value noun: %f" % (max(y_val2),))
+print("Max value pos: %f" % (max(y_val3),))
 
 line1, = plt.plot(x_val, y_val1, label="verb accuracy" )
 line2, = plt.plot(x_val, y_val2, label="noun accuracy" )
@@ -189,22 +192,26 @@ plt.savefig(img_path + 'vae_acc.pdf')
 plt.close()
 
 
-iterations = [x * 20 for x in range(0, 12)] + [x * 100 for x in range(3, 120)]
-x_val = [0] + iterations
-y_val1 = [0] + [pda_accs[iteration] for iteration in iterations]
+iterations = [x * 20 for x in range(0, 12)] + [x * 100 for x in range(3, 450)]
+x_val = iterations
+y_val1 = [pda_accs[iteration] for iteration in iterations]
 
-line1, = plt.plot(x_val, y_val1, label="pseudo disambiguation accuracy")
+print("Max value pseudo-disambiguation: %f" % (max(y_val1),))
+print("Max value pseudo-disambiguation (2nd part): %f" % (max(y_val1[25:]),))
+
+
+line1, = plt.plot(x_val, y_val1, label="pseudo disambiguation accuracy p(v|n) > p(v'|n)")
 
 plt.legend(handles=[line1,], loc=1)
 
-plt.xlim([0, 10000])
+plt.xlim([0, 45000])
 plt.ylim([0.45, 0.8])
 plt.xlabel('number of steps')
 plt.ylabel('accuracy on the test set')
-plt.savefig(img_path + 'vae_pd_acc.pdf')
+plt.savefig(img_path + 'vae_pd_acc_vn.pdf')
 plt.close()
 
-line1, = plt.plot(x_val, y_val1, label="pseudo disambiguation accuracy")
+line1, = plt.plot(x_val, y_val1, label="pseudo disambiguation accuracy p(v|n) > p(v'|n)")
 
 plt.legend(handles=[line1,], loc=1)
 
@@ -212,5 +219,35 @@ plt.xlim([0, 250])
 plt.ylim([0.45, 0.8])
 plt.xlabel('number of steps')
 plt.ylabel('accuracy on the test set')
-plt.savefig(img_path + 'vae_pd_acc_250.pdf')
+plt.savefig(img_path + 'vae_pd_acc_vn_250.pdf')
+plt.close()
+
+v_accs, n_accs, p_accs, pda_accs, test_losses, train_losses = \
+    pickle.load(open(path + 'tf-np/plot_results.pkl', 'rb'))
+
+iterations = [x * 100 for x in range(0, 912)]
+x_val = iterations
+y_val1 = [v_accs[iteration] for iteration in iterations]
+y_val2 = [n_accs[iteration] for iteration in iterations]
+y_val3 = [p_accs[iteration] for iteration in iterations]
+
+print("Max value verb: %f" % (max(y_val1),))
+print("Max value noun: %f" % (max(y_val2),))
+print("Max value pos: %f" % (max(y_val3),))
+
+iterations = [x * 100 for x in range(0, 912)]
+x_val = iterations
+y_val1 = [pda_accs[iteration] for iteration in iterations]
+
+print("Max value pseudo-disambiguation: %f" % (max(y_val1),))
+
+line1, = plt.plot(x_val, y_val1, label="pseudo disambiguation accuracy p(n|v) > p(n|v')")
+
+plt.legend(handles=[line1,], loc=1)
+
+plt.xlim([0, 45000])
+plt.ylim([0.45, 0.8])
+plt.xlabel('number of steps')
+plt.ylabel('accuracy on the test set')
+plt.savefig(img_path + 'vae_pd_acc_nv.pdf')
 plt.close()
